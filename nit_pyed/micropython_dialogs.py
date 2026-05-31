@@ -940,3 +940,271 @@ class LibraryManagerDialog(QDialog):
             QMessageBox.information(self, "Fertig", msg)
         else:
             QMessageBox.critical(self, "Fehler", msg)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# pip-Paketmanager (lokaler Python-Modus)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Kuratierte Liste für Schüler/Einsteiger
+_PIP_CATALOG: list[dict] = [
+    # Daten & Mathematik
+    {"name": "numpy",        "cat": "Daten & Mathematik", "desc": "Numerische Arrays und Matrizenrechnung"},
+    {"name": "pandas",       "cat": "Daten & Mathematik", "desc": "Datenanalyse mit DataFrames"},
+    {"name": "matplotlib",   "cat": "Daten & Mathematik", "desc": "Diagramme und Grafiken erstellen"},
+    {"name": "scipy",        "cat": "Daten & Mathematik", "desc": "Wissenschaftliche Berechnungen"},
+    {"name": "sympy",        "cat": "Daten & Mathematik", "desc": "Symbolische Mathematik (CAS)"},
+    # Spiele & Grafik
+    {"name": "pygame",       "cat": "Spiele & Grafik",    "desc": "2D-Spiele und Animationen programmieren"},
+    {"name": "pyglet",       "cat": "Spiele & Grafik",    "desc": "OpenGL-Fenster und Multimedia"},
+    {"name": "Pillow",       "cat": "Spiele & Grafik",    "desc": "Bilder öffnen, bearbeiten, speichern"},
+    # Web & Netzwerk
+    {"name": "requests",     "cat": "Web & Netzwerk",     "desc": "HTTP-Anfragen (APIs abrufen)"},
+    {"name": "flask",        "cat": "Web & Netzwerk",     "desc": "Einfacher Webserver"},
+    {"name": "beautifulsoup4","cat": "Web & Netzwerk",    "desc": "HTML/XML aus Webseiten auslesen"},
+    {"name": "httpx",        "cat": "Web & Netzwerk",     "desc": "Moderner HTTP-Client"},
+    # Maschinen­lernen & KI
+    {"name": "scikit-learn", "cat": "KI & ML",            "desc": "Machine-Learning-Algorithmen"},
+    {"name": "tensorflow",   "cat": "KI & ML",            "desc": "Deep Learning (Google)"},
+    {"name": "torch",        "cat": "KI & ML",            "desc": "Deep Learning (PyTorch)"},
+    {"name": "openai",       "cat": "KI & ML",            "desc": "OpenAI-API (ChatGPT, DALL·E …)"},
+    # Hardware & Sensoren
+    {"name": "pyserial",     "cat": "Hardware",           "desc": "Serielle Schnittstelle (COM/USB)"},
+    {"name": "gpiozero",     "cat": "Hardware",           "desc": "GPIO-Pins am Raspberry Pi steuern"},
+    {"name": "smbus2",       "cat": "Hardware",           "desc": "I²C-Kommunikation"},
+    # Sonstiges
+    {"name": "qrcode",       "cat": "Sonstiges",          "desc": "QR-Codes generieren"},
+    {"name": "rich",         "cat": "Sonstiges",          "desc": "Bunte Terminal-Ausgaben"},
+    {"name": "pyqt6",        "cat": "Sonstiges",          "desc": "Grafische Benutzeroberflächen (GUI)"},
+    {"name": "pydantic",     "cat": "Sonstiges",          "desc": "Daten validieren und parsen"},
+]
+
+
+class _PipWorker(QThread):
+    log    = pyqtSignal(str)
+    done   = pyqtSignal(bool, str)
+
+    def __init__(self, packages: list[str], action: str = "install", parent=None):
+        super().__init__(parent)
+        self._packages = packages
+        self._action   = action   # "install" | "uninstall"
+
+    def run(self):
+        import subprocess, sys
+        for pkg in self._packages:
+            self.log.emit(f"{'Installiere' if self._action == 'install' else 'Deinstalliere'} {pkg} …\n")
+            cmd = [sys.executable, "-m", "pip", self._action, pkg]
+            if self._action == "uninstall":
+                cmd.append("-y")
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                self.log.emit(r.stdout)
+                if r.returncode == 0:
+                    self.log.emit(f"✓ {pkg} erfolgreich.\n")
+                else:
+                    self.log.emit(r.stderr)
+                    self.done.emit(False, f"Fehler bei {pkg}")
+                    return
+            except Exception as e:
+                self.done.emit(False, str(e))
+                return
+        action_word = "installiert" if self._action == "install" else "deinstalliert"
+        self.done.emit(True, f"Alle Pakete {action_word}.")
+
+
+class PipManagerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Python-Pakete (pip)")
+        self.setMinimumSize(700, 540)
+        self.setStyleSheet(_dialog_style())
+        self._worker: _PipWorker | None = None
+        self._installed: set[str] = set()
+        self._setup_ui()
+        self._load_installed()
+
+    # ── UI ────────────────────────────────────────────────────────────────
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        lbl = QLabel("📦  <b>Python-Pakete installieren / deinstallieren</b>")
+        lbl.setStyleSheet(f"color:{THEME['accent']}; font-size:13px;")
+        layout.addWidget(lbl)
+
+        # Suche
+        search_row = QHBoxLayout()
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Paket suchen …")
+        self._search.textChanged.connect(self._filter_list)
+        search_row.addWidget(self._search)
+        layout.addLayout(search_row)
+
+        # Hauptbereich: Katalog-Liste | Details
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.addWidget(QLabel("Verfügbare Pakete:"))
+        self._list = QListWidget()
+        self._list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        self._list.currentItemChanged.connect(self._on_select)
+        ll.addWidget(self._list)
+        splitter.addWidget(left)
+
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(QLabel("Details:"))
+        self._detail = QTextEdit()
+        self._detail.setReadOnly(True)
+        rl.addWidget(self._detail)
+        rl.addWidget(QLabel("Installierte Pakete:"))
+        self._installed_list = QListWidget()
+        self._installed_list.setMaximumHeight(130)
+        self._installed_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        rl.addWidget(self._installed_list)
+        splitter.addWidget(right)
+
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        layout.addWidget(splitter, stretch=1)
+
+        # Log
+        self._log = QTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setMaximumHeight(100)
+        layout.addWidget(self._log)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self._btn_install = QPushButton("⬇  Ausgewählte installieren")
+        self._btn_install.setStyleSheet(
+            f"background:{THEME['accent']}; color:white; font-weight:bold;"
+            f" border:none; border-radius:5px; padding:7px 18px;"
+        )
+        self._btn_install.clicked.connect(self._install_selected)
+        btn_row.addWidget(self._btn_install)
+        self._btn_uninstall = QPushButton("🗑  Markierte deinstallieren")
+        self._btn_uninstall.setStyleSheet(
+            f"background:{THEME['bg_panel']}; color:{THEME['text']};"
+            f" border:1px solid {THEME['border']}; border-radius:5px; padding:7px 18px;"
+        )
+        self._btn_uninstall.clicked.connect(self._uninstall_selected)
+        btn_row.addWidget(self._btn_uninstall)
+        btn_close = QPushButton("Schließen")
+        btn_close.clicked.connect(self.accept)
+        btn_row.addWidget(btn_close)
+        layout.addLayout(btn_row)
+
+        self._fill_catalog()
+
+    def _fill_catalog(self, filter_text: str = ""):
+        self._list.clear()
+        ft = filter_text.lower()
+        last_cat = ""
+        for entry in _PIP_CATALOG:
+            if ft and ft not in entry["name"].lower() and ft not in entry["desc"].lower():
+                continue
+            if entry["cat"] != last_cat and not ft:
+                sep = QListWidgetItem(f"── {entry['cat']} ──")
+                sep.setFlags(Qt.ItemFlag.NoItemFlags)
+                sep.setForeground(QColor(THEME["text_dim"]))
+                self._list.addItem(sep)
+                last_cat = entry["cat"]
+            item = QListWidgetItem(f"  {entry['name']}")
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            self._list.addItem(item)
+
+    def _filter_list(self, text: str):
+        self._fill_catalog(text)
+
+    def _on_select(self, current, _):
+        if not current:
+            return
+        entry = current.data(Qt.ItemDataRole.UserRole)
+        if not entry:
+            self._detail.clear()
+            return
+        status = "✓ installiert" if entry["name"].lower() in self._installed else "nicht installiert"
+        self._detail.setPlainText(
+            f"Paket:     {entry['name']}\n"
+            f"Kategorie: {entry['cat']}\n"
+            f"Status:    {status}\n\n"
+            f"{entry['desc']}\n\n"
+            f"PyPI: https://pypi.org/project/{entry['name']}/"
+        )
+
+    # ── Installierte Pakete laden ─────────────────────────────────────────
+    def _load_installed(self):
+        import subprocess, sys
+        self._log.append("Lade installierte Pakete …")
+        try:
+            r = subprocess.run(
+                [sys.executable, "-m", "pip", "list", "--format=columns"],
+                capture_output=True, text=True, timeout=15,
+            )
+            lines = r.stdout.splitlines()[2:]   # Header überspringen
+            self._installed = {line.split()[0].lower() for line in lines if line.strip()}
+            self._installed_list.clear()
+            for line in sorted(lines, key=lambda l: l.lower()):
+                if line.strip():
+                    self._installed_list.addItem(line.strip())
+            self._log.append(f"{len(self._installed)} Pakete installiert.")
+        except Exception as e:
+            self._log.append(f"Fehler: {e}")
+
+    # ── Aktionen ─────────────────────────────────────────────────────────
+    def _get_selected_packages(self) -> list[str]:
+        return [
+            item.data(Qt.ItemDataRole.UserRole)["name"]
+            for item in self._list.selectedItems()
+            if item.data(Qt.ItemDataRole.UserRole)
+        ]
+
+    def _install_selected(self):
+        pkgs = self._get_selected_packages()
+        # Auch manuell eingetippter Name aus Suchfeld, falls nicht in Liste
+        typed = self._search.text().strip()
+        if typed and typed not in pkgs and not self._list.selectedItems():
+            pkgs = [typed]
+        if not pkgs:
+            QMessageBox.information(self, "Nichts ausgewählt",
+                                    "Bitte Pakete in der Liste markieren.")
+            return
+        self._run_pip(pkgs, "install")
+
+    def _uninstall_selected(self):
+        pkgs = [item.text().split()[0]
+                for item in self._installed_list.selectedItems()]
+        if not pkgs:
+            QMessageBox.information(self, "Nichts ausgewählt",
+                                    "Bitte Pakete in der Liste installierter Pakete markieren.")
+            return
+        reply = QMessageBox.question(
+            self, "Deinstallieren?",
+            f"Folgende Pakete deinstallieren?\n{', '.join(pkgs)}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._run_pip(pkgs, "uninstall")
+
+    def _run_pip(self, packages: list[str], action: str):
+        self._btn_install.setEnabled(False)
+        self._btn_uninstall.setEnabled(False)
+        self._worker = _PipWorker(packages, action, self)
+        self._worker.log.connect(lambda t: self._log.append(t.rstrip()))
+        self._worker.done.connect(self._on_done)
+        self._worker.start()
+
+    def _on_done(self, ok: bool, msg: str):
+        self._btn_install.setEnabled(True)
+        self._btn_uninstall.setEnabled(True)
+        self._log.append(f"\n{'✓' if ok else '✗'} {msg}")
+        self._load_installed()
+        if not ok:
+            QMessageBox.critical(self, "Fehler", msg)
+

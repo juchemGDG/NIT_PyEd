@@ -232,7 +232,9 @@ class MainWindow(QMainWindow):
         )
         self._act_upload.setVisible(False)
 
-        # ── MicroPython ──
+        # ── Python ──
+        m_python = mb.addMenu("Python")
+        self._add_action(m_python, "📦  Pakete installieren (pip) …", self._open_pip_manager)
         self._m_upy = mb.addMenu("MicroPython")
         self._m_upy.setEnabled(False)
 
@@ -723,6 +725,11 @@ class MainWindow(QMainWindow):
         from .micropython_dialogs import LibraryManagerDialog
         port = self._get_serial_port(silent=True)
         dlg = LibraryManagerDialog(port or "", self)
+        dlg.exec()
+
+    def _open_pip_manager(self):
+        from .micropython_dialogs import PipManagerDialog
+        dlg = PipManagerDialog(self)
         dlg.exec()
 
     # ──────────────────────────────────────────────────────────────────────

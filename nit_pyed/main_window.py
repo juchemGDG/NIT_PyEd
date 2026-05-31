@@ -233,8 +233,8 @@ class MainWindow(QMainWindow):
         self._act_upload.setVisible(False)
 
         # ── Python ──
-        m_python = mb.addMenu("Python")
-        self._add_action(m_python, "📦  Pakete installieren (pip) …", self._open_pip_manager)
+        self._m_python = mb.addMenu("Python")
+        self._add_action(self._m_python, "📦  Pakete installieren (pip) …", self._open_pip_manager)
         self._m_upy = mb.addMenu("MicroPython")
         self._m_upy.setEnabled(False)
 
@@ -544,6 +544,7 @@ class MainWindow(QMainWindow):
         self._mode = self._mode_combo.itemData(index)
         is_upy = self._mode == "micropython"
         self._m_upy.setEnabled(is_upy)
+        self._m_python.setEnabled(not is_upy)
         self._port_lbl.setVisible(is_upy)
         self._port_combo.setVisible(is_upy)
         self._port_refresh_act.setVisible(is_upy)

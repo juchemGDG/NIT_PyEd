@@ -599,11 +599,13 @@ class MainWindow(QMainWindow):
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(self._on_process_done)
         self._process.start()
+        self._console.set_active_runner(self._process)
 
     def _stop_program(self):
         if self._process and self._process.isRunning():
             self._process.terminate_process()
             self._console.append_info("\n■  Abgebrochen.\n")
+        self._console.set_active_runner(None)
 
     def _on_process_output(self, text: str, kind: str):
         if kind == "stderr":
@@ -619,6 +621,7 @@ class MainWindow(QMainWindow):
             self._console.append_output(text)
 
     def _on_process_done(self, code: int):
+        self._console.set_active_runner(None)
         if code == 0:
             self._console.append_success(f"\n✓  Programm beendet (Code {code})\n")
         else:

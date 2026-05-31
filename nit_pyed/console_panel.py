@@ -35,12 +35,22 @@ class ProcessRunner(QThread):
         self.env = env
         self._proc = None
 
+    def send_input(self, text: str):
+        """Sendet Text an stdin des laufenden Prozesses."""
+        if self._proc and self._proc.poll() is None and self._proc.stdin:
+            try:
+                self._proc.stdin.write(text + "\n")
+                self._proc.stdin.flush()
+            except Exception:
+                pass
+
     def run(self):
         try:
             self._proc = subprocess.Popen(
                 self.cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
                 cwd=self.cwd,
                 env=self.env,
                 text=True,
@@ -377,6 +387,7 @@ class ConsolePanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._active_runner: ProcessRunner | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -407,15 +418,58 @@ class ConsolePanel(QWidget):
         )
 
         # Tab 1: Ausgabe
+        output_container = QWidget()
+        oc_layout = QVBoxLayout(output_container)
+        oc_layout.setContentsMargins(0, 0, 0, 0)
+        oc_layout.setSpacing(0)
         self.output_console = OutputConsole()
         self.output_console.error_link_clicked.connect(self.error_link_clicked)
-        self.tabs.addTab(self.output_console, "Ausgabe")
+        oc_layout.addWidget(self.output_console)
+
+        # Eingabezeile für laufende Programme (input()-Unterstützung)
+        self._input_bar = QWidget()
+        self._input_bar.setVisible(False)
+        inp_row = QHBoxLayout(self._input_bar)
+        inp_row.setContentsMargins(4, 2, 4, 4)
+        inp_row.setSpacing(4)
+        self._input_prompt = QLabel("➜")
+        self._input_prompt.setStyleSheet(
+            f"color:{THEME['accent']}; font-family:monospace; font-size:13px;"
+        )
+        inp_row.addWidget(self._input_prompt)
+        self._input_field = QLineEdit()
+        self._input_field.setPlaceholderText("Eingabe hier tippen und Enter drücken …")
+        self._input_field.setStyleSheet(
+            f"background:{THEME['bg_dark']}; color:{THEME['text']};"
+            f" border:1px solid {THEME['accent']}; border-radius:4px; padding:3px 6px;"
+            f" font-family:'JetBrains Mono', Consolas, monospace; font-size:11px;"
+        )
+        self._input_field.returnPressed.connect(self._send_input)
+        inp_row.addWidget(self._input_field)
+        oc_layout.addWidget(self._input_bar)
+        self.tabs.addTab(output_container, "Ausgabe")
 
         # Tab 2: Shell
         self.shell = ShellWidget()
         self.tabs.addTab(self.shell, "Shell")
 
         layout.addWidget(self.tabs)
+
+    def _send_input(self):
+        text = self._input_field.text()
+        self._input_field.clear()
+        # Eingabe im Ausgabefeld anzeigen (Echo)
+        self.output_console.append_info(f"➜ {text}\n")
+        if self._active_runner:
+            self._active_runner.send_input(text)
+
+    def set_active_runner(self, runner: ProcessRunner | None):
+        """Verbindet Eingabezeile mit dem aktuell laufenden Prozess."""
+        self._active_runner = runner
+        self._input_bar.setVisible(runner is not None)
+        if runner is not None:
+            self.tabs.setCurrentIndex(0)
+            self._input_field.setFocus()
 
     # Delegations-Methoden
     def append_output(self, text: str):

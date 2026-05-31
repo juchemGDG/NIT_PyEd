@@ -157,40 +157,48 @@ class FlashWorker(QThread):
     # ------------------------------------------------------------------
     # Pico: UF2 automatisch auf das BOOTSEL-Laufwerk kopieren
     # ------------------------------------------------------------------
+    # Bekannte BOOTSEL-Laufwerksnamen für alle Pico-Varianten
+    _PICO_VOLUME_PREFIXES = (
+        "RPI-RP2",   # Pico 1 (RP2040)
+        "RP2350",    # Pico 2 / Pico 2W (RP2350)
+        "RPI-RP2W",  # mögliche Variante
+    )
+
     def _find_pico_drive(self) -> str | None:
-        """Sucht das RPI-RP2 / RPI-RP2W Laufwerk (BOOTSEL-Modus)."""
-        import sys
+        """Sucht das BOOTSEL-Laufwerk (RPI-RP2, RP2350, ...)."""
+        import sys, os
         candidates = []
+
+        def _matches(name: str) -> bool:
+            n = name.upper()
+            return any(n.startswith(p) for p in self._PICO_VOLUME_PREFIXES)
+
         if sys.platform == "darwin":
-            # macOS: /Volumes/RPI-RP2 oder RPI-RP2W
-            import os
             for name in os.listdir("/Volumes"):
-                if name.upper().startswith("RPI-RP2"):
+                if _matches(name):
                     candidates.append(f"/Volumes/{name}")
         elif sys.platform == "win32":
             import string, ctypes
             for letter in string.ascii_uppercase:
                 drive = f"{letter}:\\"
-                if ctypes.windll.kernel32.GetDriveTypeW(drive) == 2:  # DRIVE_REMOVABLE
+                if ctypes.windll.kernel32.GetDriveTypeW(drive) == 2:
                     label_buf = ctypes.create_unicode_buffer(261)
                     ctypes.windll.kernel32.GetVolumeInformationW(
                         drive, label_buf, 261, None, None, None, None, 0
                     )
-                    if label_buf.value.upper().startswith("RPI-RP2"):
+                    if _matches(label_buf.value):
                         candidates.append(drive)
         else:
-            # Linux: /media/<user>/RPI-RP2 oder /run/media/<user>/RPI-RP2
-            import os, getpass
+            import getpass
             for base in [f"/media/{getpass.getuser()}", "/media", "/run/media"]:
                 if os.path.isdir(base):
                     for sub in os.listdir(base):
-                        if sub.upper().startswith("RPI-RP2"):
+                        if _matches(sub):
                             candidates.append(os.path.join(base, sub))
-                        # Linux: /media/<user>/<name>
                         subpath = os.path.join(base, sub)
                         if os.path.isdir(subpath):
                             for entry in os.listdir(subpath):
-                                if entry.upper().startswith("RPI-RP2"):
+                                if _matches(entry):
                                     candidates.append(os.path.join(subpath, entry))
         return candidates[0] if candidates else None
 
@@ -205,7 +213,13 @@ class FlashWorker(QThread):
             drive = self._find_pico_drive()
             if drive:
                 break
-            self.log.emit(f"  Warte ... ({i+1}/20) – Pico im BOOTSEL-Modus anschließen!\n")
+            import os, sys
+            # Aktuell gemountete Laufwerke anzeigen zur Diagnose
+            if sys.platform == "darwin":
+                volumes = os.listdir("/Volumes")
+                self.log.emit(f"  Warte ... ({i+1}/20) – Laufwerke: {', '.join(volumes)}\n")
+            else:
+                self.log.emit(f"  Warte ... ({i+1}/20) – Pico im BOOTSEL-Modus anschließen!\n")
             self.progress.emit(10 + i)
             time.sleep(1)
 

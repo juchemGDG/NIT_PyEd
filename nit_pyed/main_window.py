@@ -470,14 +470,19 @@ class MainWindow(QMainWindow):
             self._do_save(tab, path)
             self._update_tab_title(tab)
 
-    def _do_save(self, tab: EditorTab, path: str):
+    def _do_save(self, tab: EditorTab, path: str, silent: bool = False):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(tab.editor.get_text())
-            tab.editor.sci.setModified(False) if hasattr(tab.editor, "sci") else None
+            if hasattr(tab.editor, "sci"):
+                tab.editor.sci.setModified(False)
             self._update_tab_title(tab)
-            self._console.append_success(f"Gespeichert: {path}\n")
-            self._status_file.setText(path)
+            self._status_file.setText(f"💾  Gespeichert: {os.path.basename(path)}")
+            # Statusmeldung nach 3 Sekunden zurücksetzen
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(3000, lambda: self._status_file.setText(path))
+            if not silent:
+                self._console.append_success(f"Gespeichert: {path}\n")
         except Exception as e:
             QMessageBox.critical(self, "Fehler beim Speichern", str(e))
 
@@ -545,13 +550,14 @@ class MainWindow(QMainWindow):
         tab = self._current_tab()
         if not tab:
             return
-        # Erst speichern
+        # Unbenannte Datei: einmal Speichern-Dialog zeigen
         if not tab.filepath:
             self._save_file_as()
             if not tab.filepath:
                 return
         else:
-            self._do_save(tab, tab.filepath)
+            # Lautlos speichern – kein Popup, nur Statusleiste
+            self._do_save(tab, tab.filepath, silent=True)
 
         tab.editor.clear_error_markers()
         self._console.clear_output()
@@ -608,7 +614,7 @@ class MainWindow(QMainWindow):
             if not tab or not tab.filepath:
                 return
         else:
-            self._do_save(tab, tab.filepath)
+            self._do_save(tab, tab.filepath, silent=True)
 
         port = self._get_serial_port()
         if not port:

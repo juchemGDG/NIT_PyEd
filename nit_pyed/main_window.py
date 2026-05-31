@@ -71,7 +71,7 @@ QTabWidget::pane {{
 QTabBar::tab {{
     background: {THEME['bg_panel']};
     color: {THEME['text_dim']};
-    padding: 6px 18px;
+    padding: 6px 14px 6px 14px;
     border: none;
     border-right: 1px solid {THEME['border']};
     min-width: 80px;
@@ -86,8 +86,14 @@ QTabBar::tab:hover {{
     color: {THEME['text']};
 }}
 QTabBar::close-button {{
-    image: none;
     subcontrol-position: right;
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    border-radius: 3px;
+}}
+QTabBar::close-button:hover {{
+    background: {THEME['accent']};
 }}
 QSplitter::handle {{
     background: {THEME['border']};

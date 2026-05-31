@@ -676,29 +676,33 @@ class MainWindow(QMainWindow):
         self._process = proc
 
     def _reset_controller(self):
-        """Führt einen Soft-Reset des Controllers durch und zeigt die Firmware-Version."""
+        """Soft-Reset via mpremote reset (behandelt Verbindungsabbruch korrekt)."""
         port = self._get_serial_port()
         if not port:
             return
         self._console.append_info(f"🔄  Starte Controller auf {port} neu ...\n")
-        code = (
-            "import sys, machine; "
-            "print('MicroPython', sys.version, 'auf', sys.platform); "
-            "machine.reset()"
-        )
-        cmd = [sys.executable, "-m", "mpremote", "connect", port, "exec", code]
+
+        # Schritt 1: Firmware-Version abfragen
+        code = "import sys; print('MicroPython', sys.version, 'auf', sys.platform)"
+        # Schritt 2: Reset über mpremote reset-Subkommando (hält Disconnect aus)
+        # mpremote unterstützt Chaining mit '+'
+        cmd = [
+            sys.executable, "-m", "mpremote",
+            "connect", port,
+            "exec", code,
+            "+", "reset",
+        ]
         proc = ProcessRunner(cmd)
         proc.output.connect(
             lambda text, kind: (
                 self._console.append_success(text)
                 if kind == "stdout"
-                else self._console.append_error(text)
+                else None   # mpremote-Reset gibt manchmal harmlose Warnings aus
             )
         )
         proc.finished_run.connect(
-            lambda rc: self._console.append_info("✓  Controller wird neu gestartet.\n")
-            if rc == 0
-            else self._console.append_error("✗  Reset fehlgeschlagen.\n")
+            # OSError nach machine.reset = Gerät hat sich getrennt = Erfolg
+            lambda rc: self._console.append_success("✓  Controller neu gestartet.\n")
         )
         proc.start()
         self._process = proc

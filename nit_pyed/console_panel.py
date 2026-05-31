@@ -171,12 +171,16 @@ class OutputConsole(QTextEdit):
 class ShellWidget(QWidget):
     """Einfache interaktive Shell mit Eingabezeile und Ausgabebereich."""
 
+    # Thread-sicheres Signal: aus Hintergrund-Thread emittierbar
+    _text_ready = pyqtSignal(str, str)   # (text, color)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._history: list[str] = []
         self._hist_idx = 0
         self._proc: subprocess.Popen | None = None
         self._master_fd: int | None = None   # PTY master (Unix)
+        self._text_ready.connect(self._do_append)
         self._setup_ui()
         self._start_shell()
 
@@ -296,23 +300,12 @@ class ShellWidget(QWidget):
             self._append(line, THEME["terminal_text"])
 
     def _append(self, text: str, color: str):
-        from PyQt6.QtCore import QMetaObject, Qt
-        # Thread-sicherer Aufruf
-        from PyQt6.QtCore import QMetaObject
-        QMetaObject.invokeMethod(
-            self,
-            "_do_append",
-            Qt.ConnectionType.QueuedConnection,
-            *[],
-        )
-        # Direkte Methode über Signal
-        self._bridge_append(text, color)
+        """Thread-sicher: aus Hintergrund-Thread aufrufbar."""
+        self._text_ready.emit(text, color)
 
     def _bridge_append(self, text: str, color: str):
-        from PyQt6.QtCore import QMetaObject, Qt
-        # Nutze das Main-Thread-Event via Closure
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(0, lambda: self._do_append(text, color))
+        """Alias für _append (Kompatibilität)."""
+        self._text_ready.emit(text, color)
 
     def _do_append(self, text: str, color: str):
         cursor = self.output.textCursor()

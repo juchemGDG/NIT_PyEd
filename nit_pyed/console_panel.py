@@ -176,6 +176,7 @@ class ShellWidget(QWidget):
         self._history: list[str] = []
         self._hist_idx = 0
         self._proc: subprocess.Popen | None = None
+        self._master_fd: int | None = None   # PTY master (Unix)
         self._setup_ui()
         self._start_shell()
 
@@ -232,19 +233,61 @@ class ShellWidget(QWidget):
     def _start_shell(self):
         shell = os.environ.get("SHELL", "/bin/bash") if sys.platform != "win32" else "cmd.exe"
         try:
-            self._proc = subprocess.Popen(
-                [shell],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                cwd=Path.home(),
-            )
-            t = threading.Thread(target=self._read_output, daemon=True)
-            t.start()
+            if sys.platform != "win32":
+                # Unix/macOS: PTY verwenden damit bash/sh nicht buffert
+                import pty, termios, fcntl, struct
+                master_fd, slave_fd = pty.openpty()
+                # Fenstergroesse setzen (80x24) damit bash sich korrekt verhält
+                try:
+                    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ,
+                                struct.pack("HHHH", 24, 80, 0, 0))
+                except Exception:
+                    pass
+                self._proc = subprocess.Popen(
+                    [shell],
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    close_fds=True,
+                    cwd=Path.home(),
+                )
+                os.close(slave_fd)
+                self._master_fd = master_fd
+                t = threading.Thread(target=self._read_pty, daemon=True)
+                t.start()
+            else:
+                self._proc = subprocess.Popen(
+                    [shell],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    cwd=Path.home(),
+                )
+                t = threading.Thread(target=self._read_output, daemon=True)
+                t.start()
         except Exception as e:
             self._append(f"Shell konnte nicht gestartet werden: {e}\n", THEME["error"])
+
+    def _read_pty(self):
+        """Liest kontinuierlich vom PTY-Master (Unix/macOS)."""
+        import select
+        while self._proc and self._proc.poll() is None:
+            try:
+                r, _, _ = select.select([self._master_fd], [], [], 0.1)
+                if r:
+                    data = os.read(self._master_fd, 4096)
+                    if data:
+                        text = data.decode("utf-8", errors="replace")
+                        # ANSI-Escape-Sequenzen entfernen (einfache Bereinigung)
+                        import re as _re
+                        text = _re.sub(r'\x1b\[[0-9;]*[mABCDEFGHJKSTfnsuhl]', '', text)
+                        text = _re.sub(r'\x1b\][^\x07]*\x07', '', text)  # OSC
+                        text = text.replace('\r\n', '\n').replace('\r', '\n')
+                        self._bridge_append(text, THEME["terminal_text"])
+            except OSError:
+                break
 
     def _read_output(self):
         if not self._proc:
@@ -286,8 +329,14 @@ class ShellWidget(QWidget):
             return
         self._history.append(cmd)
         self._hist_idx = len(self._history)
-        self._do_append(f"$ {cmd}\n", THEME["accent"])
-        if self._proc and self._proc.poll() is None:
+        if self._master_fd is not None:
+            # PTY: schreiben → bash echot den Befehl selbst zurück
+            try:
+                os.write(self._master_fd, (cmd + "\n").encode())
+            except OSError as e:
+                self._do_append(f"Fehler: {e}\n", THEME["error"])
+        elif self._proc and self._proc.poll() is None:
+            self._do_append(f"$ {cmd}\n", THEME["accent"])
             try:
                 self._proc.stdin.write(cmd + "\n")
                 self._proc.stdin.flush()
@@ -314,6 +363,12 @@ class ShellWidget(QWidget):
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
+        if self._master_fd is not None:
+            try:
+                os.close(self._master_fd)
+            except OSError:
+                pass
+            self._master_fd = None
         if self._proc and self._proc.poll() is None:
             self._proc.terminate()
         super().closeEvent(event)

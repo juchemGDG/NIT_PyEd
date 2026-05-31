@@ -237,6 +237,13 @@ class MainWindow(QMainWindow):
             self._m_upy, "Bibliotheken installieren …", self._open_library_manager
         )
         self._m_upy.addSeparator()
+        self._add_action(
+            self._m_upy, "ℹ️  Firmware-Version abfragen", self._query_firmware_version
+        )
+        self._add_action(
+            self._m_upy, "🔄  Controller neu starten", self._reset_controller
+        )
+        self._m_upy.addSeparator()
 
         # Board-Untermenü
         m_board = self._m_upy.addMenu("Controller wählen")
@@ -636,6 +643,65 @@ class MainWindow(QMainWindow):
         from .micropython_dialogs import FlashDialog
         dlg = FlashDialog(self._board, self)
         dlg.exec()
+
+    def _query_firmware_version(self):
+        """Fragt die MicroPython-Firmware-Version vom Controller ab."""
+        port = self._get_serial_port()
+        if not port:
+            return
+        self._console.append_info(f"ℹ️  Lese Firmware-Version von {port} ...\n")
+        code = (
+            "import sys; "
+            "v = sys.implementation; "
+            "print('MicroPython', sys.version, 'auf', sys.platform); "
+            "print('Implementation:', v.name, v.version)"
+        )
+        cmd = [sys.executable, "-m", "mpremote", "connect", port, "exec", code]
+        proc = ProcessRunner(cmd)
+        proc.output.connect(
+            lambda text, kind: (
+                self._console.append_success(text)
+                if kind == "stdout"
+                else self._console.append_error(text)
+            )
+        )
+        proc.finished_run.connect(
+            lambda code: self._console.append_info("\n") if code == 0
+            else self._console.append_error(
+                "✗  Konnte keine Verbindung herstellen.\n"
+                "Bitte Controller anschließen und erneut versuchen.\n"
+            )
+        )
+        proc.start()
+        self._process = proc
+
+    def _reset_controller(self):
+        """Führt einen Soft-Reset des Controllers durch und zeigt die Firmware-Version."""
+        port = self._get_serial_port()
+        if not port:
+            return
+        self._console.append_info(f"🔄  Starte Controller auf {port} neu ...\n")
+        code = (
+            "import sys, machine; "
+            "print('MicroPython', sys.version, 'auf', sys.platform); "
+            "machine.reset()"
+        )
+        cmd = [sys.executable, "-m", "mpremote", "connect", port, "exec", code]
+        proc = ProcessRunner(cmd)
+        proc.output.connect(
+            lambda text, kind: (
+                self._console.append_success(text)
+                if kind == "stdout"
+                else self._console.append_error(text)
+            )
+        )
+        proc.finished_run.connect(
+            lambda rc: self._console.append_info("✓  Controller wird neu gestartet.\n")
+            if rc == 0
+            else self._console.append_error("✗  Reset fehlgeschlagen.\n")
+        )
+        proc.start()
+        self._process = proc
 
     def _open_library_manager(self):
         from .micropython_dialogs import LibraryManagerDialog

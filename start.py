@@ -25,8 +25,10 @@ def pip_install():
 
 def run_editor():
     python = VENV_DIR / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    editor_main = Path(__file__).parent / "nit_pyed" / "main.py"
-    os.execv(str(python), [str(python), str(editor_main)] + sys.argv[1:])
+    project_dir = str(Path(__file__).parent)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = project_dir
+    os.execve(str(python), [str(python), "-m", "nit_pyed.main"] + sys.argv[1:], env)
 
 
 def main():

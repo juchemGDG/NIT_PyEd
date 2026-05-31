@@ -244,32 +244,78 @@ class FlashWorker(QThread):
             return
 
         try:
-            import os
+            import os, sys, time, subprocess as _sp
             fw_size = os.path.getsize(fw)
             dest = os.path.join(drive, os.path.basename(fw))
             self.log.emit(f"Kopiere {os.path.basename(fw)} ({fw_size // 1024} KB) → {drive} ...\n")
 
-            # Chunk-weise kopieren mit Fortschrittsanzeige
-            # (shutil.copy2 kann auf macOS bei USB-Laufwerken hängen)
-            CHUNK = 65536  # 64 KB
-            written = 0
-            with open(fw, "rb") as src, open(dest, "wb") as dst:
-                while True:
-                    chunk = src.read(CHUNK)
-                    if not chunk:
+            if sys.platform == "darwin":
+                # macOS: Python open() hängt auf USB-FAT-Volumes (bekanntes Problem).
+                # /bin/cp nutzt fcopyfile() auf Kernel-Ebene – zuverlässiger.
+                self.log.emit("(macOS: verwende /bin/cp)\n")
+                proc = _sp.Popen(
+                    ["/bin/cp", fw, dest],
+                    stderr=_sp.PIPE, stdout=_sp.PIPE
+                )
+                deadline = time.monotonic() + 90
+                timed_out = False
+                while proc.poll() is None:
+                    if time.monotonic() > deadline:
+                        proc.kill()
+                        proc.wait()
+                        timed_out = True
                         break
-                    dst.write(chunk)
-                    written += len(chunk)
-                    pct = 50 + int(written / fw_size * 45)
-                    self.progress.emit(pct)
-                # Sicherstellen dass alles auf das Laufwerk geschrieben wird
-                dst.flush()
-                os.fsync(dst.fileno())
+                    elapsed_frac = 1 - max(0, deadline - time.monotonic()) / 90
+                    self.progress.emit(int(51 + elapsed_frac * 44))
+                    time.sleep(0.4)
 
-            self.progress.emit(100)
-            self.log.emit(f"✓ {written // 1024} KB übertragen.\n")
-            self.log.emit("Pico startet automatisch neu mit der neuen Firmware.\n")
-            self.done.emit(True, "Flash erfolgreich! Pico startet neu.")
+                if timed_out:
+                    if not os.path.exists(drive):
+                        # Pico hat sich neu gestartet → Laufwerk verschwunden = Erfolg
+                        self.progress.emit(100)
+                        self.log.emit("✓ Pico hat sich neu gestartet (Laufwerk verschwunden).\n")
+                        self.done.emit(True, "Flash erfolgreich! Pico startet neu.")
+                    else:
+                        self.done.emit(False, "Zeitüberschreitung (90 s). Pico hat nicht reagiert.\n"
+                                       "Bitte BOOTSEL-Modus erneut aktivieren und nochmal versuchen.")
+                    return
+
+                rc = proc.returncode
+                stderr_out = proc.stderr.read().decode(errors="replace").strip()
+                drive_still_there = os.path.exists(drive)
+
+                if rc == 0 or not drive_still_there:
+                    # rc=0: normaler Erfolg; Laufwerk weg: Pico hat sich nach dem Flash neu gestartet
+                    self.progress.emit(100)
+                    if not drive_still_there:
+                        self.log.emit("✓ Pico hat sich neu gestartet (Laufwerk verschwunden).\n")
+                    else:
+                        self.log.emit("✓ Datei erfolgreich übertragen.\n")
+                    self.log.emit("Pico startet automatisch neu mit der neuen Firmware.\n")
+                    self.done.emit(True, "Flash erfolgreich! Pico startet neu.")
+                else:
+                    self.done.emit(False, f"Fehler beim Kopieren:\n{stderr_out or 'Unbekannter Fehler'}\n\n"
+                                   "Bitte sicherstellen:\n"
+                                   "• Pico ist im BOOTSEL-Modus (Laufwerk sichtbar im Finder)\n"
+                                   "• Ausreichende Schreibrechte auf das Laufwerk")
+            else:
+                # Windows / Linux: chunk-weise kopieren
+                CHUNK = 65536
+                written = 0
+                with open(fw, "rb") as src, open(dest, "wb") as dst:
+                    while True:
+                        chunk = src.read(CHUNK)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                        written += len(chunk)
+                        self.progress.emit(50 + int(written / fw_size * 45))
+                    dst.flush()
+                    os.fsync(dst.fileno())
+                self.progress.emit(100)
+                self.log.emit(f"✓ {written // 1024} KB übertragen.\n")
+                self.log.emit("Pico startet automatisch neu mit der neuen Firmware.\n")
+                self.done.emit(True, "Flash erfolgreich! Pico startet neu.")
         except Exception as e:
             self.done.emit(False, f"Fehler beim Kopieren: {e}\n\nBitte sicherstellen:\n"
                            "• Pico ist im BOOTSEL-Modus (Laufwerk sichtbar im Finder)\n"

@@ -39,10 +39,14 @@ class ProcessRunner(QThread):
         """Sendet Text an stdin des laufenden Prozesses."""
         if self._proc and self._proc.poll() is None and self._proc.stdin:
             try:
-                self._proc.stdin.write(text + "\n")
-                self._proc.stdin.flush()
+                self._proc.stdin.buffer.write((text + "\n").encode("utf-8"))
+                self._proc.stdin.buffer.flush()
             except Exception:
-                pass
+                try:
+                    self._proc.stdin.write(text + "\n")
+                    self._proc.stdin.flush()
+                except Exception:
+                    pass
 
     def run(self):
         try:
@@ -53,13 +57,15 @@ class ProcessRunner(QThread):
                 stdin=subprocess.PIPE,
                 cwd=self.cwd,
                 env=self.env,
-                text=True,
-                bufsize=1,
+                bufsize=0,   # unbuffered – damit input()-Prompts sofort erscheinen
             )
-            # Stdout und Stderr parallel lesen
+            # Stdout und Stderr parallel in kleinen Chunks lesen (kein Warten auf \n)
             def read_stream(stream, kind):
-                for line in stream:
-                    self.output.emit(line, kind)
+                while True:
+                    chunk = stream.read(256)
+                    if not chunk:
+                        break
+                    self.output.emit(chunk.decode("utf-8", errors="replace"), kind)
                 stream.close()
 
             t_out = threading.Thread(target=read_stream, args=(self._proc.stdout, "stdout"))

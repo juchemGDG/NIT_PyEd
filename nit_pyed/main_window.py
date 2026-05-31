@@ -587,7 +587,7 @@ class MainWindow(QMainWindow):
 
         if self._mode == "python":
             python = self._get_python_executable()
-            cmd = [python, tab.filepath]
+            cmd = [python, "-u", tab.filepath]
         else:
             # MicroPython: via mpremote run
             port = self._get_serial_port()

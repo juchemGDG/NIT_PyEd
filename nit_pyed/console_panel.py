@@ -36,17 +36,13 @@ class ProcessRunner(QThread):
         self._proc = None
 
     def send_input(self, text: str):
-        """Sendet Text an stdin des laufenden Prozesses."""
+        """Sendet Text an stdin des laufenden Prozesses (binärer Stream)."""
         if self._proc and self._proc.poll() is None and self._proc.stdin:
             try:
-                self._proc.stdin.buffer.write((text + "\n").encode("utf-8"))
-                self._proc.stdin.buffer.flush()
+                self._proc.stdin.write((text + "\n").encode("utf-8"))
+                self._proc.stdin.flush()
             except Exception:
-                try:
-                    self._proc.stdin.write(text + "\n")
-                    self._proc.stdin.flush()
-                except Exception:
-                    pass
+                pass
 
     def run(self):
         try:

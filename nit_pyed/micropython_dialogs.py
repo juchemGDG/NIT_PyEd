@@ -245,14 +245,36 @@ class FlashWorker(QThread):
 
         try:
             import os
+            fw_size = os.path.getsize(fw)
             dest = os.path.join(drive, os.path.basename(fw))
-            self.log.emit(f"Kopiere {os.path.basename(fw)} → {drive} ...\n")
-            shutil.copy2(fw, dest)
+            self.log.emit(f"Kopiere {os.path.basename(fw)} ({fw_size // 1024} KB) → {drive} ...\n")
+
+            # Chunk-weise kopieren mit Fortschrittsanzeige
+            # (shutil.copy2 kann auf macOS bei USB-Laufwerken hängen)
+            CHUNK = 65536  # 64 KB
+            written = 0
+            with open(fw, "rb") as src, open(dest, "wb") as dst:
+                while True:
+                    chunk = src.read(CHUNK)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    written += len(chunk)
+                    pct = 50 + int(written / fw_size * 45)
+                    self.progress.emit(pct)
+                # Sicherstellen dass alles auf das Laufwerk geschrieben wird
+                dst.flush()
+                os.fsync(dst.fileno())
+
             self.progress.emit(100)
+            self.log.emit(f"✓ {written // 1024} KB übertragen.\n")
             self.log.emit("Pico startet automatisch neu mit der neuen Firmware.\n")
             self.done.emit(True, "Flash erfolgreich! Pico startet neu.")
         except Exception as e:
-            self.done.emit(False, f"Fehler beim Kopieren: {e}")
+            self.done.emit(False, f"Fehler beim Kopieren: {e}\n\nBitte sicherstellen:\n"
+                           "• Pico ist im BOOTSEL-Modus (Laufwerk sichtbar im Finder)\n"
+                           "• Die .uf2-Datei ist nicht beschädigt\n"
+                           "• Ausreichende Schreibrechte auf das Laufwerk")
 
     # ------------------------------------------------------------------
     # micro:bit: HEX automatisch auf das MICROBIT-Laufwerk kopieren
@@ -542,15 +564,22 @@ class FlashDialog(QDialog):
         self._worker.progress.connect(self._progress.setValue)
         self._worker.done.connect(self._on_flash_done)
         self._btn_flash.setEnabled(False)
+        self._btn_flash.setText("Flashe …")
         self._worker.start()
 
     def _on_flash_done(self, ok: bool, msg: str):
         self._btn_flash.setEnabled(True)
+        self._btn_flash.setText("Jetzt flashen")
         self._log_append(f"\n{'✓ ' if ok else '✗ '}{msg}\n")
         if ok:
             QMessageBox.information(self, "Fertig", msg)
         else:
-            QMessageBox.critical(self, "Fehler", msg)
+            box = QMessageBox(self)
+            box.setWindowTitle("Fehler")
+            box.setIcon(QMessageBox.Icon.Critical)
+            box.setText(msg)
+            box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            box.exec()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

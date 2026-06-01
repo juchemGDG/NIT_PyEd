@@ -30,7 +30,7 @@ GLOBAL_STYLE = f"""
 QMainWindow, QWidget {{
     background: {THEME['bg_dark']};
     color: {THEME['text']};
-    font-family: 'Segoe UI', 'Ubuntu', 'Helvetica Neue', sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', 'Ubuntu', 'Helvetica Neue', sans-serif;
     font-size: 13px;
 }}
 QMenuBar {{

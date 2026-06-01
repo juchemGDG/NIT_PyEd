@@ -190,6 +190,9 @@ class MainWindow(QMainWindow):
         self._setup_central()
         self._setup_statusbar()
         self._new_tab()             # Startdatei
+        # currentIndexChanged feuerte beim addItem noch nicht (Signal erst danach verbunden)
+        # → Modus einmalig manuell initialisieren
+        QTimer.singleShot(0, lambda: self._on_mode_changed(0))
 
     # ──────────────────────────────────────────────────────────────────────
     # Fenster
@@ -523,6 +526,10 @@ class MainWindow(QMainWindow):
                 self._tab_widget.setCurrentIndex(i)
                 return
         self._new_tab(path)
+        # Dateibaum auf das Verzeichnis der geöffneten Datei setzen
+        folder = os.path.dirname(os.path.abspath(path))
+        if os.path.isdir(folder):
+            self._file_panel.set_root(folder)
 
     def _save_file(self):
         tab = self._current_tab()

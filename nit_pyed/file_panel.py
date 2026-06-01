@@ -245,7 +245,9 @@ class _DeviceListWorker(QThread):
 class DeviceFilePanel(QWidget):
     """Zeigt Dateien auf dem angeschlossenen MicroPython-Controller."""
 
-    file_open_requested = pyqtSignal(str)   # lokaler Temp-Pfad
+    file_open_requested = pyqtSignal(str)
+    refresh_started     = pyqtSignal()    # Port wird gleich belegt
+    refresh_done        = pyqtSignal()    # Port wieder frei   # lokaler Temp-Pfad
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -338,8 +340,10 @@ class DeviceFilePanel(QWidget):
         worker.result.connect(self._on_result)
         worker.error.connect(self._on_error)
         worker.finished.connect(lambda: self._btn_refresh.setEnabled(True))
+        worker.finished.connect(lambda: self.refresh_done.emit())
         worker.start()
         self._worker = worker
+        self.refresh_started.emit()
 
     def _on_result(self, files: list):
         self._list.clear()

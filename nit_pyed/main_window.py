@@ -389,6 +389,8 @@ class MainWindow(QMainWindow):
         # Konsole
         self._console = ConsolePanel()
         self._console.error_link_clicked.connect(self._jump_to_error)
+        self._device_panel.refresh_started.connect(self._console.pause_shell)
+        self._device_panel.refresh_done.connect(self._console.resume_shell)
         self._right_splitter.addWidget(self._console)
 
         self._right_splitter.setSizes([520, 200])
@@ -687,6 +689,7 @@ class MainWindow(QMainWindow):
         if not port:
             return
         self._console.append_info(f"ℹ️  Lese Firmware-Version von {port} ...\n")
+        self._console.pause_shell()
         code = (
             "import sys; "
             "v = sys.implementation; "
@@ -709,6 +712,7 @@ class MainWindow(QMainWindow):
                 "Bitte Controller anschließen und erneut versuchen.\n"
             )
         )
+        proc.finished_run.connect(lambda _rc: self._console.resume_shell())
         proc.start()
         self._process = proc
 
@@ -718,6 +722,7 @@ class MainWindow(QMainWindow):
         if not port:
             return
         self._console.append_info(f"🔄  Starte Controller auf {port} neu ...\n")
+        self._console.pause_shell()
 
         # Schritt 1: Firmware-Version abfragen
         code = "import sys; print('MicroPython', sys.version, 'auf', sys.platform)"
@@ -738,9 +743,9 @@ class MainWindow(QMainWindow):
             )
         )
         proc.finished_run.connect(
-            # OSError nach machine.reset = Gerät hat sich getrennt = Erfolg
             lambda rc: self._console.append_success("✓  Controller neu gestartet.\n")
         )
+        proc.finished_run.connect(lambda _rc: self._console.resume_shell())
         proc.start()
         self._process = proc
 

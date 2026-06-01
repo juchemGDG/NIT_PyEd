@@ -552,6 +552,8 @@ class ConsolePanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._active_runner: ProcessRunner | None = None
+        self._shell_is_micropython = False
+        self._shell_pending_cmd: list | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -616,8 +618,18 @@ class ConsolePanel(QWidget):
         # Tab 2: Shell
         self.shell = ShellWidget()
         self.tabs.addTab(self.shell, "Shell")
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(self.tabs)
+
+    def _on_tab_changed(self, index: int):
+        """mpremote-REPL erst starten wenn Shell-Tab aktiv wird."""
+        if index == 1 and self._shell_pending_cmd:
+            self.shell.restart(self._shell_pending_cmd)
+            self._shell_pending_cmd = None
+        elif index != 1 and self._shell_is_micropython:
+            # Shell-Tab verlassen → Port freigeben
+            self.shell.stop()
 
     def _send_input(self):
         text = self._input_field.text()
@@ -654,21 +666,36 @@ class ConsolePanel(QWidget):
         self.output_console.clear_output()
 
     def pause_shell(self):
-        """Port freigeben: Shell-Prozess beenden (vor MicroPythonRunner-Start)."""
+        """Port freigeben: Shell-Prozess beenden."""
         self.shell.stop()
+        if self._shell_is_micropython:
+            # Beim nächsten Tab-Klick neu starten
+            self._shell_pending_cmd = self.shell._current_cmd
 
     def resume_shell(self):
-        """Shell-Prozess neu starten (nach MicroPythonRunner-Ende)."""
-        self.shell.resume()
+        """Shell neu starten, aber nur wenn Shell-Tab gerade sichtbar ist."""
+        if self._shell_is_micropython and self.tabs.currentIndex() == 1:
+            self.shell.resume()
 
     def set_shell_mode(self, mode: str, port: str = "", python_exec: str = ""):
-        """Startet Shell-Tab neu: Python-REPL (mode='python') oder MicroPython-REPL."""
+        """Setzt Shell-Modus. mpremote-REPL wird erst beim Tab-Klick gestartet."""
         if mode == "micropython" and port:
             cmd = [sys.executable, "-m", "mpremote", "connect", port]
             label = f"Shell  –  MicroPython REPL ({port})"
+            self._shell_is_micropython = True
+            self.shell.stop()                 # alten Prozess beenden
+            self.shell._current_cmd = cmd     # für resume()
+            if self.tabs.currentIndex() == 1:
+                # Shell-Tab bereits aktiv → sofort starten
+                self.shell.restart(cmd)
+            else:
+                # Lazy: erst beim nächsten Tab-Klick starten
+                self._shell_pending_cmd = cmd
         else:
             exe = python_exec or sys.executable
             cmd = [exe, "-i"]
             label = "Shell  –  Python REPL"
+            self._shell_is_micropython = False
+            self._shell_pending_cmd = None
+            self.shell.restart(cmd)
         self.tabs.setTabText(1, label)
-        self.shell.restart(cmd)

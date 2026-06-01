@@ -317,6 +317,10 @@ class TutorPanel(QWidget):
         self._chat_view.ensureCursorVisible()
 
     def _on_done(self):
+        # Wenn _on_error den Worker bereits zurückgesetzt hat, Status nicht überschreiben.
+        if self._worker is None:
+            self._pending_response = ""
+            return
         if self._pending_response:
             self._history.append(
                 {"role": "assistant", "content": self._pending_response}

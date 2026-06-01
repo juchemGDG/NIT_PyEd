@@ -11,12 +11,15 @@ from .main_window import MainWindow, GLOBAL_STYLE
 def _find_logo() -> QIcon:
     """Sucht logo.png im Paket- oder Projektordner."""
     candidates = [
-        Path(__file__).parent / "logo.png",          # nit_pyed/logo.png
-        Path(__file__).parent.parent / "logo.png",    # Projektordner/logo.png
+        Path(__file__).resolve().parent / "logo.png",          # nit_pyed/logo.png
+        Path(__file__).resolve().parent.parent / "logo.png",    # Projektordner/logo.png
     ]
+    from PyQt6.QtGui import QPixmap
     for p in candidates:
         if p.exists():
-            return QIcon(str(p))
+            px = QPixmap(str(p))
+            if not px.isNull():
+                return QIcon(px)
     return QIcon()
 
 

@@ -203,14 +203,16 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(GLOBAL_STYLE)
         # Window-Icon (falls Logo noch nicht per app.setWindowIcon gesetzt)
         from pathlib import Path
+        from PyQt6.QtGui import QIcon as _QIcon, QPixmap as _QPixmap
         for p in [
-            Path(__file__).parent / "logo.png",
-            Path(__file__).parent.parent / "logo.png",
+            Path(__file__).resolve().parent / "logo.png",
+            Path(__file__).resolve().parent.parent / "logo.png",
         ]:
             if p.exists():
-                from PyQt6.QtGui import QIcon as _QIcon
-                self.setWindowIcon(_QIcon(str(p)))
-                break
+                px = _QPixmap(str(p))
+                if not px.isNull():
+                    self.setWindowIcon(_QIcon(px))
+                    break
 
     # ──────────────────────────────────────────────────────────────────────
     # Menüleiste

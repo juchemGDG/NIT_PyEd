@@ -416,10 +416,13 @@ class ShellWidget(QWidget):
                     data = os.read(self._master_fd, 4096)
                     if data:
                         text = data.decode("utf-8", errors="replace")
-                        # ANSI-Escape-Sequenzen entfernen (einfache Bereinigung)
+                        # ANSI/VT100-Escape-Sequenzen entfernen
                         import re as _re
-                        text = _re.sub(r'\x1b\[[0-9;]*[mABCDEFGHJKSTfnsuhl]', '', text)
-                        text = _re.sub(r'\x1b\][^\x07]*\x07', '', text)  # OSC
+                        # CSI-Sequenzen: ESC [ <param-bytes 0x20-0x3f>* <final-byte 0x40-0x7e>
+                        # deckt auch ESC[?2004h (Bracketed-Paste) und alle DEC-Privatmodi ab
+                        text = _re.sub(r'\x1b\[[\x20-\x3f]*[\x40-\x7e]', '', text)
+                        text = _re.sub(r'\x1b\][^\x07]*\x07', '', text)   # OSC
+                        text = _re.sub(r'\x1b[^[\]]', '', text)            # sonstige 2-Zeichen-ESC
                         text = text.replace('\r\n', '\n').replace('\r', '\n')
                         self._bridge_append(text, THEME["terminal_text"])
             except OSError:

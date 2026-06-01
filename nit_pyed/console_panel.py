@@ -82,7 +82,127 @@ class ProcessRunner(QThread):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Konsolenausgabe-Widget
+# MicroPython-Runner: interaktiver Raw-REPL via pyserial
+# ──────────────────────────────────────────────────────────────────────────────
+class MicroPythonRunner(QThread):
+    """Führt ein MicroPython-Skript über Raw-REPL (pyserial) aus.
+    Unterstützt bidirektionales stdin/stdout – input() funktioniert.
+    """
+    output       = pyqtSignal(str, str)   # (text, kind)
+    finished_run = pyqtSignal(int)
+
+    def __init__(self, port: str, script_path: str):
+        super().__init__()
+        self._port        = port
+        self._script_path = script_path
+        self._serial      = None
+        self._abort       = False
+
+    def send_input(self, text: str):
+        """Schickt Benutzereingabe an den Controller."""
+        if self._serial and self._serial.is_open:
+            try:
+                self._serial.write((text + "\r\n").encode("utf-8"))
+            except Exception:
+                pass
+
+    def terminate_process(self):
+        self._abort = True
+        if self._serial and self._serial.is_open:
+            try:
+                self._serial.write(b"\x03")   # Ctrl+C
+            except Exception:
+                pass
+
+    def run(self):
+        import serial
+        import time as _t
+        try:
+            ser = serial.Serial(self._port, 115200, timeout=0.1)
+            self._serial = ser
+
+            # Laufendes Programm unterbrechen
+            ser.write(b"\x03\x03")
+            _t.sleep(0.3)
+            ser.reset_input_buffer()
+
+            # Raw-REPL aktivieren (Ctrl+A)
+            ser.write(b"\x01")
+            if not self._read_until(ser, b">", timeout=4.0):
+                self.output.emit("⚠  Raw-REPL konnte nicht gestartet werden.\n", "stderr")
+                self.finished_run.emit(1)
+                ser.close()
+                return
+
+            # Skript übertragen + ausführen (Ctrl+D)
+            with open(self._script_path, "rb") as f:
+                code = f.read()
+            ser.write(code + b"\x04")
+
+            # Auf "OK" warten
+            ok = ser.read(2)
+            if ok != b"OK":
+                extra = ser.read(256)
+                self.output.emit(
+                    f"⚠  REPL Fehler: {(ok + extra)!r}\n", "stderr"
+                )
+                self.finished_run.emit(1)
+                ser.close()
+                return
+
+            # Ausgabe lesen bis ersten \x04 (stdout beendet)
+            stdout_done = False
+            stderr_buf  = b""
+            rc          = 0
+
+            while not self._abort:
+                chunk = ser.read(256)
+                if not chunk:
+                    continue
+
+                if not stdout_done:
+                    if b"\x04" in chunk:
+                        i    = chunk.index(b"\x04")
+                        head = chunk[:i]
+                        if head:
+                            self.output.emit(head.decode("utf-8", errors="replace"), "stdout")
+                        stdout_done = True
+                        stderr_buf  = chunk[i + 1:]
+                    else:
+                        self.output.emit(chunk.decode("utf-8", errors="replace"), "stdout")
+                else:
+                    stderr_buf += chunk
+                    if b"\x04" in stderr_buf:
+                        i   = stderr_buf.index(b"\x04")
+                        err = stderr_buf[:i].decode("utf-8", errors="replace").strip()
+                        if err and "KeyboardInterrupt" not in err:
+                            self.output.emit(err + "\n", "stderr")
+                            rc = 1
+                        break
+
+            try:
+                ser.write(b"\x02")   # Zurück in normalen REPL (Ctrl+B)
+            except Exception:
+                pass
+            ser.close()
+            self.finished_run.emit(rc)
+
+        except Exception as exc:
+            self.output.emit(f"⚠  Verbindungsfehler: {exc}\n", "stderr")
+            self.finished_run.emit(1)
+
+    @staticmethod
+    def _read_until(ser, needle: bytes, timeout: float) -> bool:
+        import time as _t
+        buf      = b""
+        deadline = _t.time() + timeout
+        while _t.time() < deadline:
+            data = ser.read(64)
+            if data:
+                buf += data
+                if needle in buf:
+                    return True
+        return False
 # ──────────────────────────────────────────────────────────────────────────────
 _ERROR_PATTERN = re.compile(
     r'File "(?P<file>[^"]+)", line (?P<line>\d+)'

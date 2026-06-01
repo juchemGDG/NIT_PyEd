@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from .config import APP_NAME, APP_VERSION, THEME, SUPPORTED_BOARDS
 from .editor_widget import CodeEditor
 from .file_panel import FilePanel, DeviceFilePanel
-from .console_panel import ConsolePanel, ProcessRunner
+from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -588,15 +588,13 @@ class MainWindow(QMainWindow):
         if self._mode == "python":
             python = self._get_python_executable()
             cmd = [python, "-u", tab.filepath]
+            self._process = ProcessRunner(cmd, cwd=os.path.dirname(tab.filepath))
         else:
-            # MicroPython: via mpremote run
+            # MicroPython: Raw-REPL über pyserial (stdin-Forwarding)
             port = self._get_serial_port()
             if not port:
                 return
-            cmd = [sys.executable, "-m", "mpremote", "connect", port,
-                   "run", tab.filepath]
-
-        self._process = ProcessRunner(cmd, cwd=os.path.dirname(tab.filepath))
+            self._process = MicroPythonRunner(port, tab.filepath)
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(self._on_process_done)
         self._process.start()

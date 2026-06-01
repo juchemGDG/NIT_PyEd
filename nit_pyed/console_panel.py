@@ -395,6 +395,9 @@ class ShellWidget(QWidget):
                                 struct.pack("HHHH", 24, 80, 0, 0))
                 except Exception:
                     pass
+                env = os.environ.copy()
+                env["TERM"] = "dumb"          # readline ohne Cursor-Escape-Seq.
+                env["PYTHONUNBUFFERED"] = "1"
                 self._proc = subprocess.Popen(
                     cmd,
                     stdin=slave_fd,
@@ -402,6 +405,7 @@ class ShellWidget(QWidget):
                     stderr=slave_fd,
                     close_fds=True,
                     cwd=Path.home(),
+                    env=env,
                 )
                 os.close(slave_fd)
                 self._master_fd = master_fd
@@ -439,7 +443,10 @@ class ShellWidget(QWidget):
                         text = _re.sub(r'\x1b\[[\x20-\x3f]*[\x40-\x7e]', '', text)
                         text = _re.sub(r'\x1b\][^\x07]*\x07', '', text)   # OSC
                         text = _re.sub(r'\x1b[^[\]]', '', text)            # sonstige 2-Zeichen-ESC
-                        text = text.replace('\r\n', '\n').replace('\r', '\n')
+                        # \r ohne folgendes \n = "Zeilenanfang" → wegwerfen (readline-Redraw)
+                        import re as _re2
+                        text = _re2.sub(r'\r(?!\n)', '', text)
+                        text = text.replace('\r\n', '\n')
                         self._bridge_append(text, THEME["terminal_text"])
             except OSError:
                 break

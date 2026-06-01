@@ -795,28 +795,8 @@ class MainWindow(QMainWindow):
             return
         self._status_mode.setText(f"MicroPython  –  {port}")
         self._device_panel.refresh(port)
+        # mpremote REPL starten – der REPL-Banner zeigt Firmware-Version
         self._console.set_shell_mode("micropython", port=port)
-        self._console.append_info(f"\n⚡  Verbunden mit {port} – lese Firmware-Version ...\n")
-        code = (
-            "import sys; "
-            "print('Board:', sys.platform); "
-            "print('MicroPython', sys.version)"
-        )
-        cmd = [sys.executable, "-m", "mpremote", "connect", port, "exec", code]
-        proc = ProcessRunner(cmd)
-        proc.output.connect(
-            lambda text, kind: (
-                self._console.append_success(text)
-                if kind == "stdout" else None
-            )
-        )
-        proc.finished_run.connect(
-            lambda rc: self._console.append_error(
-                "⚠  Controller antwortet nicht. Bitte Verbindung prüfen.\n"
-            ) if rc != 0 else None
-        )
-        proc.start()
-        self._process = proc
 
     def _get_serial_port(self, silent: bool = False) -> str | None:
         """Gibt den aktuell in der Toolbar gewählten Port zurück."""

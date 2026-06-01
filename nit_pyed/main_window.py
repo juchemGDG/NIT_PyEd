@@ -9,7 +9,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QTabWidget, QLabel, QStatusBar, QToolBar,
+    QSplitter, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
     QComboBox, QFileDialog, QMessageBox, QInputDialog,
     QDialog, QPushButton,
 )
@@ -316,6 +316,15 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._port_combo)
 
         self._port_refresh_act = tbtn("↻", self._refresh_ports, "Geräte aktualisieren")
+        # Widget für den ↻-Button suchen und vergrößern
+        for w in tb.findChildren(QToolButton):
+            if w.text() == "↻":
+                w.setStyleSheet(
+                    f"QToolButton {{ font-size:18px; padding:2px 6px; "
+                    f"background:transparent; color:{THEME['text']}; border:none; border-radius:4px; }}"
+                    f"QToolButton:hover {{ background:{THEME['accent']}; color:#fff; }}"
+                )
+                break
         self._port_lbl.setVisible(False)
         self._port_combo.setVisible(False)
         self._port_refresh_act.setVisible(False)
@@ -323,7 +332,10 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         self._upload_btn_act = tbtn("↑  Hochladen", self._upload_to_device,
                                      "Code auf Controller übertragen (F7)")
+        self._reset_btn_act = tbtn("🔄  Neustart", self._reset_controller,
+                                    "Controller neu starten")
         self._upload_btn_act.setVisible(False)
+        self._reset_btn_act.setVisible(False)
 
         # Timer für automatisches Port-Scanning im MicroPython-Modus
         self._port_scan_timer = QTimer(self)
@@ -550,6 +562,7 @@ class MainWindow(QMainWindow):
         self._port_refresh_act.setVisible(is_upy)
         self._act_upload.setVisible(is_upy)
         self._upload_btn_act.setVisible(is_upy)
+        self._reset_btn_act.setVisible(is_upy)
         self._device_panel.setVisible(is_upy)
         if is_upy:
             self._refresh_ports()

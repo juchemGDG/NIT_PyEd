@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
         self._mode = "python"       # "python" | "micropython"
         self._board = "ESP32"
         self._process: ProcessRunner | None = None
+        self._retired_threads: list = []   # hält QThread-Referenzen bis finished
         self._port_busy = False     # verhindert gleichzeitige mpremote-Prozesse
         self._settings_font_size: int = 14
         self._settings_line_numbers: bool = True
@@ -481,6 +482,20 @@ class MainWindow(QMainWindow):
         self._port_busy = False
         self._console.resume_shell()
 
+    def _retire_process(self):
+        """Alten self._process sicher aufbewahren bis QThread.finished feuert.
+        Verhindert 'QThread destroyed while still running' → abort()."""
+        old = self._process
+        if old is None:
+            return
+        if old.isRunning():
+            old.terminate_process()
+            self._retired_threads.append(old)
+            old.finished.connect(
+                lambda t=old: self._retired_threads.remove(t)
+                if t in self._retired_threads else None
+            )
+
     def _on_device_refresh_start(self):
         self._port_busy = True
         self._console.pause_shell()
@@ -674,6 +689,7 @@ class MainWindow(QMainWindow):
         self._console.clear_output()
         self._console.append_info(f"▶  Starte: {tab.filepath}\n")
 
+        self._retire_process()
         if self._mode == "python":
             python = self._get_python_executable()
             cmd = [python, "-u", tab.filepath]
@@ -742,6 +758,7 @@ class MainWindow(QMainWindow):
         self._console.append_info(f"↑  Lade {remote_name} auf {port} hoch ...\n")
         cmd = [sys.executable, "-m", "mpremote", "connect", port,
                "cp", tab.filepath, f":{remote_name}"]
+        self._retire_process()
         self._process = ProcessRunner(cmd)
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(
@@ -784,6 +801,7 @@ class MainWindow(QMainWindow):
             ) if rc != 0 else None
         )
         proc.finished_run.connect(lambda _rc: self._release_port())
+        self._retire_process()
         proc.start()
         self._process = proc
 
@@ -803,6 +821,7 @@ class MainWindow(QMainWindow):
             lambda rc: self._console.append_success("✓  Controller neu gestartet.\n")
         )
         proc.finished_run.connect(lambda _rc: self._release_port())
+        self._retire_process()
         proc.start()
         self._process = proc
 
@@ -984,4 +1003,11 @@ class MainWindow(QMainWindow):
                     event.ignore()
                     return
                 break
+        # Laufende QThreads synchron beenden bevor Python-GC greift
+        if self._process and self._process.isRunning():
+            self._process.terminate_process()
+            self._process.wait(2000)
+        for t in list(self._retired_threads):
+            if t.isRunning():
+                t.wait(1000)
         event.accept()

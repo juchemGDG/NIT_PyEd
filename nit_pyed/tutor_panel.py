@@ -163,6 +163,7 @@ class TutorPanel(QWidget):
             {"role": "system", "content": INFI_SYSTEM_PROMPT}
         ]
         self._worker: OllamaWorker | None = None
+        self._retired_workers: list = []   # hält OllamaWorker bis finished
         self._pending_response = ""
         self._build_ui()
 
@@ -294,6 +295,12 @@ class TutorPanel(QWidget):
         self._worker.token_ready.connect(self._on_token)
         self._worker.response_done.connect(self._on_done)
         self._worker.error_occurred.connect(self._on_error)
+        # finished feuert NACH run() – erst dann ist es sicher, die Referenz freizugeben
+        w = self._worker
+        self._worker.finished.connect(
+            lambda t=w: self._retired_workers.remove(t)
+            if t in self._retired_workers else None
+        )
         self._worker.start()
 
         # Platzhalter für die laufende Antwort einfügen
@@ -315,13 +322,15 @@ class TutorPanel(QWidget):
                 {"role": "assistant", "content": self._pending_response}
             )
         self._chat_view.append("")
-        self._worker = None
-        self._send_btn.setEnabled(True)
-        self._status_lbl.setStyleSheet(
-            f"color:{THEME['success']}; font-size:10px;"
-        )
-        self._status_lbl.setToolTip("Ollama verbunden")
         self._pending_response = ""
+        self._send_btn.setEnabled(True)
+        color = THEME["success"]
+        self._status_lbl.setStyleSheet(f"color:{color}; font-size:10px;")
+        self._status_lbl.setToolTip("Ollama verbunden")
+        # Worker-Referenz in Warteliste verschieben; finished-Signal entfernt sie
+        if self._worker is not None:
+            self._retired_workers.append(self._worker)
+            self._worker = None
 
     def _on_error(self, msg: str):
         err_color = THEME["error"]
@@ -329,12 +338,15 @@ class TutorPanel(QWidget):
             f"<span style='color:{err_color}'>⚠ {msg}</span>"
         )
         self._chat_view.append("")
-        self._worker = None
+        self._pending_response = ""
         self._send_btn.setEnabled(True)
         self._status_lbl.setStyleSheet(
             f"color:{THEME['error']}; font-size:10px;"
         )
         self._status_lbl.setToolTip("Ollama nicht erreichbar")
+        if self._worker is not None:
+            self._retired_workers.append(self._worker)
+            self._worker = None
 
     # ── Verlauf löschen ─────────────────────────────────────────────────────
     def _clear_history(self):

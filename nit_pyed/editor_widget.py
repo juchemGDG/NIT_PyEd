@@ -199,6 +199,17 @@ class CodeEditor(QWidget):
         if HAS_QSCI:
             self.sci.setMarginWidth(0, "0000" if visible else "")
 
+    def set_word_wrap(self, enabled: bool):
+        """Zeilenumbruch ein- oder ausschalten."""
+        if HAS_QSCI:
+            mode = QsciScintilla.WrapMode.WrapWord if enabled else QsciScintilla.WrapMode.WrapNone
+            self.sci.setWrapMode(mode)
+
+    def set_highlight_current_line(self, enabled: bool):
+        """Aktuelle Zeile hervorheben ein- oder ausschalten."""
+        if HAS_QSCI:
+            self.sci.setCaretLineVisible(enabled)
+
 
 # ------------------------------------------------------------------
 # Fallback-Editor ohne QScintilla

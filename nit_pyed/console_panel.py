@@ -703,5 +703,10 @@ class ConsolePanel(QWidget):
     def set_font_size(self, size: int):
         """Schriftgröße der Konsole und Shell ändern."""
         font = QFont("JetBrains Mono, Fira Code, Consolas, monospace", size)
-        self.output_console.output.setFont(font)
+        self.output_console.setFont(font)   # OutputConsole ist selbst das QTextEdit
         self.shell.output.setFont(font)
+
+    def set_scrollback_limit(self, lines: int):
+        """Maximale Zeilenzahl im Output- und Shell-Puffer setzen."""
+        self.output_console.document().setMaximumBlockCount(lines)
+        self.shell.output.document().setMaximumBlockCount(lines)

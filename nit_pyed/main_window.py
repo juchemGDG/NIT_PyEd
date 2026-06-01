@@ -188,6 +188,13 @@ class MainWindow(QMainWindow):
         self._port_busy = False     # verhindert gleichzeitige mpremote-Prozesse
         self._settings_font_size: int = 14
         self._settings_line_numbers: bool = True
+        self._settings_word_wrap: bool = False
+        self._settings_highlight_line: bool = True
+        self._settings_autosave_secs: int = 0
+        self._settings_python_exec: str = ""
+        self._settings_scrollback: int = 5000
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave_all)
         self._setup_window()
         self._setup_menubar()
         self._setup_toolbar()
@@ -888,10 +895,20 @@ class MainWindow(QMainWindow):
             self,
             font_size=self._settings_font_size,
             line_numbers=self._settings_line_numbers,
+            word_wrap=self._settings_word_wrap,
+            highlight_line=self._settings_highlight_line,
+            autosave_secs=self._settings_autosave_secs,
+            python_exec=self._settings_python_exec,
+            scrollback=self._settings_scrollback,
         )
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
             self._settings_font_size = dlg.font_size
             self._settings_line_numbers = dlg.line_numbers
+            self._settings_word_wrap = dlg.word_wrap
+            self._settings_highlight_line = dlg.highlight_line
+            self._settings_autosave_secs = dlg.autosave_secs
+            self._settings_python_exec = dlg.python_exec
+            self._settings_scrollback = dlg.scrollback_lines
             try:
                 self._apply_settings()
             except Exception as exc:
@@ -907,7 +924,23 @@ class MainWindow(QMainWindow):
         for tab in self._tabs:
             tab.editor.set_font_size(self._settings_font_size)
             tab.editor.set_line_numbers_visible(self._settings_line_numbers)
+            tab.editor.set_word_wrap(self._settings_word_wrap)
+            tab.editor.set_highlight_current_line(self._settings_highlight_line)
         self._console.set_font_size(self._settings_font_size)
+        self._console.set_scrollback_limit(self._settings_scrollback)
+        # Auto-Save-Timer
+        self._autosave_timer.stop()
+        if self._settings_autosave_secs > 0:
+            self._autosave_timer.start(self._settings_autosave_secs * 1000)
+
+    def _autosave_all(self):
+        """Alle geänderten, bereits gespeicherten Tabs automatisch speichern."""
+        for tab in self._tabs:
+            if tab.filepath and tab.editor.is_modified():
+                try:
+                    self._do_save(tab, tab.filepath, silent=True)
+                except Exception:
+                    pass
 
     def closeEvent(self, event):
         for tab in self._tabs:

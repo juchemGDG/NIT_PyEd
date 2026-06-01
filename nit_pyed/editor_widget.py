@@ -184,16 +184,20 @@ class CodeEditor(QWidget):
         if HAS_QSCI:
             self.sci.setFont(font)
             if hasattr(self, "_lexer") and self._lexer:
-                for style in range(128):
-                    self._lexer.setFont(font, style)
                 self._lexer.setDefaultFont(font)
+                # Not all style IDs are valid on all QScintilla/Python builds.
+                for style in range(128):
+                    try:
+                        self._lexer.setFont(font, style)
+                    except Exception:
+                        pass
         else:
             self.sci.setFont(font)
 
     def set_line_numbers_visible(self, visible: bool):
         """Zeilennummern ein- oder ausblenden."""
         if HAS_QSCI:
-            self.sci.setMarginWidth(0, "0000" if visible else 0)
+            self.sci.setMarginWidth(0, "0000" if visible else "")
 
 
 # ------------------------------------------------------------------
@@ -229,3 +233,6 @@ class _FallbackEditor(QWidget):
 
     def document(self):
         return self._edit.document()
+
+    def setFont(self, font):
+        self._edit.setFont(font)

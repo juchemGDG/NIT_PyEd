@@ -1,6 +1,7 @@
 """Haupt-Fenster von NIT PyEd."""
 import os
 import sys
+import traceback
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
@@ -193,6 +194,7 @@ class MainWindow(QMainWindow):
         self._setup_central()
         self._setup_statusbar()
         self._new_tab()             # Startdatei
+        self._apply_settings()      # Standard-Einstellungen sofort anwenden
         # currentIndexChanged feuerte beim addItem noch nicht (Signal erst danach verbunden)
         # → Modus einmalig manuell initialisieren
         QTimer.singleShot(0, lambda: self._on_mode_changed(0))
@@ -890,7 +892,15 @@ class MainWindow(QMainWindow):
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
             self._settings_font_size = dlg.font_size
             self._settings_line_numbers = dlg.line_numbers
-            self._apply_settings()
+            try:
+                self._apply_settings()
+            except Exception as exc:
+                traceback.print_exc()
+                QMessageBox.critical(
+                    self,
+                    "Einstellungen",
+                    f"Einstellungen konnten nicht angewendet werden:\n{exc}",
+                )
 
     def _apply_settings(self):
         """Einstellungen auf alle offenen Tabs + Konsole anwenden."""

@@ -1,4 +1,4 @@
-"""Haupt-Fenster von NIT PyEd."""
+"""Haupt-Fenster von NIT_Code."""
 import os
 import sys
 import traceback

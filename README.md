@@ -1,6 +1,8 @@
-# NIT PyEd
+# NIT_Code
 
-**NIT PyEd** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
+**NIT_Code** ist ein moderner, plattformunabhängiger Code-Editor für Python und MicroPython – entwickelt für den Einsatz im Schulunterricht (Sekundarstufe I & II).
+
+GitHub-Repository: https://github.com/juchemGDG/NIT_Code
 
 ---
 
@@ -71,7 +73,7 @@ ollama pull llama3.2
 
 ### Infi aktivieren
 
-1. NIT PyEd starten
+1. NIT_Code starten
 2. **Datei → Einstellungen** öffnen (oder `Strg+,`)
 3. Im Abschnitt **KI-TUTOR (INFI)** den Haken bei „Infi-Tutor aktivieren" setzen
 4. **Übernehmen** klicken – das Chat-Panel öffnet sich rechts
@@ -137,7 +139,7 @@ oder direkt:
 ## Projektstruktur
 
 ```
-NIT_PyEd/
+NIT_Code/
 ├── nit_pyed/
 │   ├── main.py                 # Einstiegspunkt
 │   ├── main_window.py          # Hauptfenster

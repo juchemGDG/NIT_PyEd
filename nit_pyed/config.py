@@ -1,7 +1,7 @@
-"""Konstanten und Konfiguration für NIT PyEd."""
+"""Konstanten und Konfiguration für NIT_Code."""
 import shutil
 
-APP_NAME = "NIT PyEd"
+APP_NAME = "NIT_Code"
 APP_VERSION = "1.0.1"
 
 # GitHub-Repository für Bibliotheken

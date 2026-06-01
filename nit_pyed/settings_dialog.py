@@ -1,4 +1,4 @@
-"""Einstellungs-Dialog für NIT PyEd."""
+"""Einstellungs-Dialog für NIT_Code."""
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,

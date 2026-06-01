@@ -107,10 +107,12 @@ class MicroPythonRunner(QThread):
                 pass
 
     def terminate_process(self):
+        """Unterbricht laufendes Programm sicher (doppeltes Ctrl+C + Raw-REPL-Exit)."""
         self._abort = True
         if self._serial and self._serial.is_open:
             try:
-                self._serial.write(b"\x03")   # Ctrl+C
+                # Doppeltes Ctrl+C: unterbricht auch Endlosschleifen zuverlässig
+                self._serial.write(b"\x03\x03")
             except Exception:
                 pass
 
@@ -312,6 +314,7 @@ class ShellWidget(QWidget):
         self._hist_idx = 0
         self._proc: subprocess.Popen | None = None
         self._master_fd: int | None = None   # PTY master (Unix)
+        self._current_cmd: list = [sys.executable, "-i"]
         self._text_ready.connect(self._do_append)
         self._setup_ui()
         self._start_shell([sys.executable, "-i"])  # Standard: Python REPL
@@ -368,6 +371,21 @@ class ShellWidget(QWidget):
 
     def restart(self, cmd: list):
         """Beendet den aktuellen Prozess und startet neu mit neuem Befehl."""
+        self._current_cmd = cmd
+        self._kill_proc()
+        self.output.clear()
+        self._start_shell(cmd)
+
+    def stop(self):
+        """Beendet den Prozess ohne Neustart (Port freigeben)."""
+        self._kill_proc()
+
+    def resume(self):
+        """Startet den zuletzt verwendeten Befehl neu."""
+        if self._current_cmd:
+            self._start_shell(self._current_cmd)
+
+    def _kill_proc(self):
         if self._master_fd is not None:
             try:
                 os.close(self._master_fd)
@@ -380,8 +398,6 @@ class ShellWidget(QWidget):
             except Exception:
                 pass
         self._proc = None
-        self.output.clear()
-        self._start_shell(cmd)
 
     def _start_shell(self, cmd: list):
         """Startet cmd als interaktiven Prozess (PTY auf Unix, PIPE auf Windows)."""
@@ -636,6 +652,14 @@ class ConsolePanel(QWidget):
 
     def clear_output(self):
         self.output_console.clear_output()
+
+    def pause_shell(self):
+        """Port freigeben: Shell-Prozess beenden (vor MicroPythonRunner-Start)."""
+        self.shell.stop()
+
+    def resume_shell(self):
+        """Shell-Prozess neu starten (nach MicroPythonRunner-Ende)."""
+        self.shell.resume()
 
     def set_shell_mode(self, mode: str, port: str = "", python_exec: str = ""):
         """Startet Shell-Tab neu: Python-REPL (mode='python') oder MicroPython-REPL."""

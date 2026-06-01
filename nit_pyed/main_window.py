@@ -596,6 +596,8 @@ class MainWindow(QMainWindow):
             port = self._get_serial_port()
             if not port:
                 return
+            # mpremote-Shell pausieren damit Port frei ist
+            self._console.pause_shell()
             self._process = MicroPythonRunner(port, tab.filepath)
         self._process.output.connect(self._on_process_output)
         self._process.finished_run.connect(self._on_process_done)
@@ -607,6 +609,8 @@ class MainWindow(QMainWindow):
             self._process.terminate_process()
             self._console.append_info("\n■  Abgebrochen.\n")
         self._console.set_active_runner(None)
+        if self._mode == "micropython":
+            self._console.resume_shell()
 
     def _on_process_output(self, text: str, kind: str):
         if kind == "stderr":
@@ -623,6 +627,8 @@ class MainWindow(QMainWindow):
 
     def _on_process_done(self, code: int):
         self._console.set_active_runner(None)
+        if self._mode == "micropython":
+            self._console.resume_shell()
         if code == 0:
             self._console.append_success(f"\n✓  Programm beendet (Code {code})\n")
         else:

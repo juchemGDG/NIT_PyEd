@@ -23,10 +23,11 @@ class AisChatPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._view = None
         self._build_ui()
 
     def _build_ui(self):
-        self.setMinimumWidth(260)
+        self.setMinimumWidth(200)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -55,11 +56,10 @@ class AisChatPanel(QWidget):
 
             self._view = QWebEngineView()
             self._view.setPage(page)
-            self._view.loadFinished.connect(self._inject_mobile_viewport)
+            self._view.loadFinished.connect(self._inject_viewport)
             self._view.setUrl(QUrl(AIS_CHAT_URL))
             layout.addWidget(self._view, stretch=1)
         else:
-            # Hinweis wenn PyQt6-WebEngine nicht installiert ist
             info = QLabel(
                 "PyQt6-WebEngine ist nicht installiert.\n\n"
                 "Bitte im Terminal ausführen:\n\n"
@@ -72,16 +72,23 @@ class AisChatPanel(QWidget):
             layout.addWidget(info)
             layout.addStretch()
 
-    def _inject_mobile_viewport(self):
-        """Setzt Viewport auf device-width, damit der Inhalt die Panel-Breite füllt."""
-        self._view.page().runJavaScript("""
-            (function() {
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._inject_viewport()
+
+    def _inject_viewport(self, *_):
+        """Setzt Viewport auf die aktuelle Widget-Breite in Pixeln."""
+        if self._view is None:
+            return
+        width = max(self._view.width(), 200)
+        self._view.page().runJavaScript(f"""
+            (function() {{
                 var meta = document.querySelector('meta[name="viewport"]');
-                if (!meta) {
+                if (!meta) {{
                     meta = document.createElement('meta');
                     meta.name = 'viewport';
                     document.head.appendChild(meta);
-                }
-                meta.content = 'width=device-width, initial-scale=1.0';
-            })();
+                }}
+                meta.content = 'width={width}, initial-scale=1.0';
+            }})();
         """)

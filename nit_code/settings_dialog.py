@@ -33,6 +33,7 @@ class SettingsDialog(QDialog):
         tutor_mode: str = "none",
         tutor_url: str = "",
         tutor_model: str = "",
+        sketchbook_dir: str = "",
     ):
         super().__init__(parent)
         self.setWindowTitle("Einstellungen")
@@ -95,7 +96,7 @@ class SettingsDialog(QDialog):
         )
         self._build_ui(font_size, line_numbers, word_wrap, highlight_line,
                        autosave_secs, python_exec, scrollback,
-                       tutor_mode, tutor_url, tutor_model)
+                       tutor_mode, tutor_url, tutor_model, sketchbook_dir)
 
     # ── Hilfsmethode: Abschnittsüberschrift ─────────────────────────────
     @staticmethod
@@ -122,6 +123,7 @@ class SettingsDialog(QDialog):
         tutor_mode: str = "none",
         tutor_url: str = "",
         tutor_model: str = "",
+        sketchbook_dir: str = "",
     ):
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)
@@ -224,7 +226,32 @@ class SettingsDialog(QDialog):
         root.addLayout(form_py)
         root.addSpacing(6)
 
-        # ── Abschnitt: KI-Tutor ──────────────────────────────────────────────
+        # ── Abschnitt: Dateisystem ──────────────────────────────────────────
+        title_fs, sep_fs = self._section("DATEISYSTEM")
+        root.addWidget(title_fs)
+        root.addWidget(sep_fs)
+
+        form_fs = QFormLayout()
+        form_fs.setSpacing(8)
+        form_fs.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        sb_row = QHBoxLayout()
+        sb_row.setSpacing(6)
+        self._edit_sketchbook = QLineEdit()
+        self._edit_sketchbook.setPlaceholderText("(optional)")
+        self._edit_sketchbook.setText(sketchbook_dir)
+        sb_row.addWidget(self._edit_sketchbook)
+        btn_sketchbook = QPushButton("…")
+        btn_sketchbook.setObjectName("browse")
+        btn_sketchbook.setFixedWidth(32)
+        btn_sketchbook.clicked.connect(self._browse_sketchbook)
+        sb_row.addWidget(btn_sketchbook)
+        form_fs.addRow("Sketchbook-Ordner:", sb_row)
+
+        root.addLayout(form_fs)
+        root.addSpacing(6)
+
+        # ── Abschnitt: KI-Tutor ─────────────────────────────────────────────
         title5, sep5 = self._section("KI-TUTOR")
         root.addWidget(title5)
         root.addWidget(sep5)
@@ -305,6 +332,15 @@ class SettingsDialog(QDialog):
         if path:
             self._edit_py.setText(path)
 
+    def _browse_sketchbook(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Sketchbook-Ordner wählen",
+            self._edit_sketchbook.text().strip() or "/home",
+        )
+        if folder:
+            self._edit_sketchbook.setText(folder)
+
     # ── Ergebnis abrufen ────────────────────────────────────────────────
     @property
     def font_size(self) -> int:
@@ -354,3 +390,7 @@ class SettingsDialog(QDialog):
         if self._edit_tutor_model is None:
             return ""
         return self._edit_tutor_model.text().strip()
+
+    @property
+    def sketchbook_dir(self) -> str:
+        return self._edit_sketchbook.text().strip()

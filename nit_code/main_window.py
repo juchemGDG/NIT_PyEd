@@ -407,6 +407,7 @@ class MainWindow(QMainWindow):
         self._file_panel.setMinimumWidth(0)
         self._file_panel.setMaximumWidth(10000)
         self._file_panel.file_open_requested.connect(self._open_file_path)
+        self._file_panel.set_root(self._settings_sketchbook)
         self._left_splitter.addWidget(self._file_panel)
 
         self._device_panel = DeviceFilePanel()
@@ -573,10 +574,6 @@ class MainWindow(QMainWindow):
                 self._tab_widget.setCurrentIndex(i)
                 return
         self._new_tab(path)
-        # Dateibaum auf das Verzeichnis der geöffneten Datei setzen
-        folder = os.path.dirname(os.path.abspath(path))
-        if os.path.isdir(folder):
-            self._file_panel.set_root(folder)
 
     def _save_file(self):
         tab = self._current_tab()
@@ -954,6 +951,7 @@ class MainWindow(QMainWindow):
             self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
             try:
                 self._apply_settings()
+                self._apply_sketchbook_root()
                 self._save_persistent_settings()
             except Exception as exc:
                 traceback.print_exc()
@@ -1019,7 +1017,12 @@ class MainWindow(QMainWindow):
         )
         if folder:
             self._settings_sketchbook = self._normalize_sketchbook_dir(folder)
+            self._apply_sketchbook_root()
             self._save_persistent_settings()
+
+    def _apply_sketchbook_root(self):
+        if hasattr(self, "_file_panel"):
+            self._file_panel.set_root(self._settings_sketchbook)
 
     def _rebuild_sketchbook_menu(self):
         self._m_sketchbook.clear()

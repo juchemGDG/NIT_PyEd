@@ -1662,7 +1662,7 @@ class MainWindow(QMainWindow):
             sizes = self._main_splitter.sizes()
             if sizes[2] == 0:
                 total = sum(sizes)
-                self._main_splitter.setSizes([sizes[0], total - sizes[0] - 200, 200])
+                self._main_splitter.setSizes([sizes[0], total - sizes[0] - 100, 100])
 
     def _autosave_all(self):
         """Alle geänderten, bereits gespeicherten Tabs automatisch speichern."""

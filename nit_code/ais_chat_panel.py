@@ -27,7 +27,7 @@ class AisChatPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setMinimumWidth(200)
+        self.setMinimumWidth(100)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -74,36 +74,26 @@ class AisChatPanel(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._inject_viewport()
+        if self._view is None:
+            return
+        width = event.size().width()
+        if width > 0:
+            self._view.setZoomFactor(width / 390)
 
     def _inject_viewport(self, *_):
-        """Passt Viewport und Zoom an die aktuelle Panel-Breite an.
-
-        Über 390px: Seite füllt die volle Breite.
-        Unter 390px: Seite rendert auf 390px und wird herausgezoomt –
-        kein horizontales Scrollen, kein abgeschnittener Inhalt.
+        """Setzt Viewport einmalig auf 390px (mobiles Layout).
+        Der Zoom-Faktor passt den Inhalt danach per resizeEvent an die Panel-Breite an.
         """
         if self._view is None:
             return
-        width = self._view.width()
-        if width < 1:
-            return
-        mobile_base = 390
-        if width >= mobile_base:
-            viewport_width = width
-            zoom = 1.0
-        else:
-            viewport_width = mobile_base
-            zoom = width / mobile_base
-        self._view.setZoomFactor(zoom)
-        self._view.page().runJavaScript(f"""
-            (function() {{
+        self._view.page().runJavaScript("""
+            (function() {
                 var meta = document.querySelector('meta[name="viewport"]');
-                if (!meta) {{
+                if (!meta) {
                     meta = document.createElement('meta');
                     meta.name = 'viewport';
                     document.head.appendChild(meta);
-                }}
-                meta.content = 'width={viewport_width}, initial-scale=1.0';
-            }})();
+                }
+                meta.content = 'width=390, initial-scale=1.0';
+            })();
         """)

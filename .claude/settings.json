@@ -8,7 +8,9 @@
       "Bash(.venv/bin/python -c \"from PyQt6.QtWebEngineWidgets import QWebEngineView; print\\('ok'\\)\")",
       "Bash(.venv/bin/pip install *)",
       "Bash(.venv/bin/python -c ' *)",
-      "Bash(.venv/bin/python -m py_compile nit_pyed/config.py nit_pyed/settings_dialog.py nit_pyed/main_window.py nit_pyed/ais_chat_panel.py)"
+      "Bash(.venv/bin/python -m py_compile nit_pyed/config.py nit_pyed/settings_dialog.py nit_pyed/main_window.py nit_pyed/ais_chat_panel.py)",
+      "Bash(git rebase *)",
+      "Bash(git stash *)"
     ]
   }
 }

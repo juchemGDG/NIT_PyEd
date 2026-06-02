@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QSpinBox, QCheckBox, QPushButton, QFrame,
-    QComboBox, QLineEdit, QFileDialog,
+    QComboBox, QLineEdit, QFileDialog, QWidget,
 )
 
 from .config import THEME, TUTOR_DEFAULT_URL, TUTOR_DEFAULT_MODEL, is_ollama_available, AIS_CHAT_URL

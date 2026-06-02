@@ -4,8 +4,18 @@ import sys
 
 block_cipher = None
 
-spec_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(spec_dir, '..'))
+# In PyInstaller-Specs ist __file__ nicht zuverlässig verfügbar.
+cwd = os.getcwd()
+if os.path.exists(os.path.join(cwd, 'release', 'launcher.py')):
+    project_root = cwd
+    spec_dir = os.path.join(cwd, 'release')
+elif os.path.exists(os.path.join(cwd, 'launcher.py')):
+    spec_dir = cwd
+    project_root = os.path.abspath(os.path.join(cwd, '..'))
+else:
+    project_root = cwd
+    spec_dir = os.path.join(cwd, 'release')
+
 entry_script = os.path.join(spec_dir, 'launcher.py')
 
 logo_path = os.path.join(project_root, 'nit_code', 'logo.png')

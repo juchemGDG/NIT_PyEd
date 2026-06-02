@@ -55,7 +55,8 @@ class AisChatPanel(QWidget):
         layout.addWidget(header)
 
         if _WEBENGINE_AVAILABLE:
-            self._profile = QWebEngineProfile("ais_chat_panel", self)
+            # Off-the-record Profil: kein Name → kein Persistenzordner auf Disk
+            self._profile = QWebEngineProfile(self)
             self._profile.setHttpUserAgent(_MOBILE_UA)
             page = QWebEnginePage(self._profile, self)
 

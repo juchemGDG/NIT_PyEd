@@ -17,8 +17,10 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from .config import AIS_CHAT_URL, THEME
 
-# Feste Breite des Panels – entspricht der natürlichen Smartphone-Breite
-PANEL_WIDTH = 390
+# Feste Breite des Panels und Zoom-Faktor für das mobile Layout
+PANEL_WIDTH = 200
+_VIEWPORT_WIDTH = 390   # Smartphone-Breite, auf die der Inhalt rendert
+PANEL_ZOOM = PANEL_WIDTH / _VIEWPORT_WIDTH
 
 
 class AisChatPanel(QWidget):
@@ -30,7 +32,8 @@ class AisChatPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setFixedWidth(PANEL_WIDTH)
+        # Breite wird vom _ai_stack in main_window gesteuert – hier nur Minimum
+        self.setMinimumWidth(100)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -77,14 +80,15 @@ class AisChatPanel(QWidget):
     def _inject_viewport(self, *_):
         if self._view is None:
             return
-        self._view.page().runJavaScript("""
-            (function() {
+        self._view.setZoomFactor(PANEL_ZOOM)
+        self._view.page().runJavaScript(f"""
+            (function() {{
                 var meta = document.querySelector('meta[name="viewport"]');
-                if (!meta) {
+                if (!meta) {{
                     meta = document.createElement('meta');
                     meta.name = 'viewport';
                     document.head.appendChild(meta);
-                }
-                meta.content = 'width=390, initial-scale=1.0';
-            })();
+                }}
+                meta.content = 'width={_VIEWPORT_WIDTH}, initial-scale=1.0';
+            }})();
         """)

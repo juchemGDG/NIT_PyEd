@@ -43,6 +43,9 @@ SUPPORTED_BOARDS = {
 TUTOR_DEFAULT_URL   = "http://localhost:11434"
 TUTOR_DEFAULT_MODEL = "llama3.2"
 
+# AIS-Chat (schulischer Web-Chatbot)
+AIS_CHAT_URL = "https://app.ais-chat.schule"
+
 
 def is_ollama_available() -> bool:
     """True wenn das ollama-Kommando im PATH gefunden wird."""

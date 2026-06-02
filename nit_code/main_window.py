@@ -12,7 +12,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
+    QSplitter, QStackedWidget, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
     QComboBox, QFileDialog, QMessageBox, QInputDialog, QMenu,
     QDialog, QPushButton, QTextEdit,
 )
@@ -21,6 +21,7 @@ from .config import APP_NAME, APP_VERSION, THEME, SUPPORTED_BOARDS
 from .editor_widget import CodeEditor
 from .file_panel import FilePanel, DeviceFilePanel
 from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
+from .ais_chat_panel import AisChatPanel
 from .settings_dialog import SettingsDialog
 from .tutor_panel import TutorPanel
 
@@ -197,7 +198,7 @@ class MainWindow(QMainWindow):
         self._settings_autosave_secs: int = 0
         self._settings_python_exec: str = ""
         self._settings_scrollback: int = 5000
-        self._settings_tutor_enabled: bool = False
+        self._settings_tutor_mode: str = "none"
         self._settings_tutor_url: str = ""
         self._settings_tutor_model: str = ""
         self._settings_sketchbook: str = str(Path.home())
@@ -420,8 +421,8 @@ class MainWindow(QMainWindow):
         # Linker Bereich: vertikaler Splitter (lokale Dateien + Controller-Dateien)
         self._left_splitter = QSplitter(Qt.Orientation.Vertical)
         self._left_splitter.setHandleWidth(2)
-        self._left_splitter.setMinimumWidth(180)
-        self._left_splitter.setMaximumWidth(350)
+        self._left_splitter.setMinimumWidth(150)
+        self._left_splitter.setMaximumWidth(300)
 
         self._file_panel = FilePanel()
         self._file_panel.setMinimumWidth(0)
@@ -464,12 +465,20 @@ class MainWindow(QMainWindow):
         self._right_splitter.setSizes([520, 200])
         self._main_splitter.addWidget(self._right_splitter)
 
-        # Tutor-Panel (standardmäßig ausgeblendet)
+        # KI-Panel: TutorPanel (Ollama) und AisChatPanel im Stack
+        self._ai_stack = QStackedWidget()
         self._tutor_panel = TutorPanel()
-        self._tutor_panel.setVisible(False)
-        self._main_splitter.addWidget(self._tutor_panel)
+        self._aischat_panel = AisChatPanel()
+        self._ai_stack.addWidget(self._tutor_panel)    # Index 0 → Ollama
+        self._ai_stack.addWidget(self._aischat_panel)  # Index 1 → AIS-Chat
+        self._ai_stack.setVisible(False)
+        self._main_splitter.addWidget(self._ai_stack)
 
-        self._main_splitter.setSizes([220, 1060, 0])
+        self._main_splitter.setSizes([150, 1060, 0])
+        # Nur der Editor-Bereich wächst beim Vergrößern des Fensters
+        self._main_splitter.setStretchFactor(0, 0)  # Datei-Panel: feste Breite
+        self._main_splitter.setStretchFactor(1, 1)  # Editor: nimmt Extra-Platz
+        self._main_splitter.setStretchFactor(2, 0)  # KI-Panel: feste Breite
 
         root_layout.addWidget(self._main_splitter)
 
@@ -1472,7 +1481,7 @@ class MainWindow(QMainWindow):
             autosave_secs=self._settings_autosave_secs,
             python_exec=self._settings_python_exec,
             scrollback=self._settings_scrollback,
-            tutor_enabled=self._settings_tutor_enabled,
+            tutor_mode=self._settings_tutor_mode,
             tutor_url=self._settings_tutor_url,
             tutor_model=self._settings_tutor_model,
             sketchbook_dir=self._settings_sketchbook,
@@ -1485,7 +1494,7 @@ class MainWindow(QMainWindow):
             self._settings_autosave_secs = dlg.autosave_secs
             self._settings_python_exec = dlg.python_exec
             self._settings_scrollback = dlg.scrollback_lines
-            self._settings_tutor_enabled = dlg.tutor_enabled
+            self._settings_tutor_mode = dlg.tutor_mode
             self._settings_tutor_url = dlg.tutor_url
             self._settings_tutor_model = dlg.tutor_model
             self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
@@ -1528,7 +1537,7 @@ class MainWindow(QMainWindow):
         self._settings_autosave_secs = self._settings_int("editor/autosave_secs", self._settings_autosave_secs)
         self._settings_python_exec = str(self._settings_store.value("python/executable", self._settings_python_exec) or "")
         self._settings_scrollback = self._settings_int("console/scrollback", self._settings_scrollback)
-        self._settings_tutor_enabled = self._settings_bool("tutor/enabled", self._settings_tutor_enabled)
+        self._settings_tutor_mode = str(self._settings_store.value("tutor/mode", self._settings_tutor_mode) or "none")
         self._settings_tutor_url = str(self._settings_store.value("tutor/url", self._settings_tutor_url) or "")
         self._settings_tutor_model = str(self._settings_store.value("tutor/model", self._settings_tutor_model) or "")
         self._settings_sketchbook = self._normalize_sketchbook_dir(
@@ -1544,7 +1553,7 @@ class MainWindow(QMainWindow):
         self._settings_store.setValue("editor/autosave_secs", self._settings_autosave_secs)
         self._settings_store.setValue("python/executable", self._settings_python_exec)
         self._settings_store.setValue("console/scrollback", self._settings_scrollback)
-        self._settings_store.setValue("tutor/enabled", self._settings_tutor_enabled)
+        self._settings_store.setValue("tutor/mode", self._settings_tutor_mode)
         self._settings_store.setValue("tutor/url", self._settings_tutor_url)
         self._settings_store.setValue("tutor/model", self._settings_tutor_model)
         self._settings_store.setValue("files/sketchbook_dir", self._settings_sketchbook)
@@ -1634,9 +1643,20 @@ class MainWindow(QMainWindow):
         self._autosave_timer.stop()
         if self._settings_autosave_secs > 0:
             self._autosave_timer.start(self._settings_autosave_secs * 1000)
-        # KI-Tutor
-        self._tutor_panel.setVisible(self._settings_tutor_enabled)
-        if self._settings_tutor_enabled:
+        # KI-Tutor (3 Modi: none / ollama / aischat)
+        from .ais_chat_panel import PANEL_WIDTH
+        mode = self._settings_tutor_mode
+        if mode == "none":
+            self._ai_stack.setMinimumWidth(0)
+            self._ai_stack.setMaximumWidth(16777215)
+            self._ai_stack.setVisible(False)
+            sizes = self._main_splitter.sizes()
+            self._main_splitter.setSizes([sizes[0], sizes[1] + sizes[2], 0])
+        elif mode == "ollama":
+            self._ai_stack.setMinimumWidth(0)
+            self._ai_stack.setMaximumWidth(16777215)
+            self._ai_stack.setCurrentIndex(0)
+            self._ai_stack.setVisible(True)
             self._tutor_panel.apply_settings(
                 self._settings_tutor_url,
                 self._settings_tutor_model,
@@ -1645,9 +1665,14 @@ class MainWindow(QMainWindow):
             if sizes[2] == 0:
                 total = sum(sizes)
                 self._main_splitter.setSizes([sizes[0], total - sizes[0] - 320, 320])
-        else:
+        elif mode == "aischat":
+            self._ai_stack.setFixedWidth(PANEL_WIDTH)
+            self._ai_stack.setCurrentIndex(1)
+            self._ai_stack.setVisible(True)
             sizes = self._main_splitter.sizes()
-            self._main_splitter.setSizes([sizes[0], sizes[1] + sizes[2], 0])
+            if sizes[2] == 0:
+                total = sum(sizes)
+                self._main_splitter.setSizes([sizes[0], total - sizes[0] - PANEL_WIDTH, PANEL_WIDTH])
 
     def _autosave_all(self):
         """Alle geänderten, bereits gespeicherten Tabs automatisch speichern."""

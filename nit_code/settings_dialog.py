@@ -3,10 +3,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QSpinBox, QCheckBox, QPushButton, QFrame,
-    QComboBox, QLineEdit, QFileDialog,
+    QComboBox, QLineEdit, QFileDialog, QWidget,
 )
 
-from .config import THEME, TUTOR_DEFAULT_URL, TUTOR_DEFAULT_MODEL, is_ollama_available
+from .config import THEME, TUTOR_DEFAULT_URL, TUTOR_DEFAULT_MODEL, is_ollama_available, AIS_CHAT_URL
 
 # Auto-Save-Intervalle: Anzeigetext → Sekunden
 _AUTOSAVE_OPTIONS = [
@@ -30,7 +30,7 @@ class SettingsDialog(QDialog):
         autosave_secs: int = 0,
         python_exec: str = "",
         scrollback: int = 5000,
-        tutor_enabled: bool = False,
+        tutor_mode: str = "none",
         tutor_url: str = "",
         tutor_model: str = "",
         sketchbook_dir: str = "",
@@ -96,7 +96,7 @@ class SettingsDialog(QDialog):
         )
         self._build_ui(font_size, line_numbers, word_wrap, highlight_line,
                        autosave_secs, python_exec, scrollback,
-                       tutor_enabled, tutor_url, tutor_model, sketchbook_dir)
+                       tutor_mode, tutor_url, tutor_model, sketchbook_dir)
 
     # ── Hilfsmethode: Abschnittsüberschrift ─────────────────────────────
     @staticmethod
@@ -120,7 +120,7 @@ class SettingsDialog(QDialog):
         autosave_secs: int,
         python_exec: str,
         scrollback: int,
-        tutor_enabled: bool = False,
+        tutor_mode: str = "none",
         tutor_url: str = "",
         tutor_model: str = "",
         sketchbook_dir: str = "",
@@ -226,7 +226,7 @@ class SettingsDialog(QDialog):
         root.addLayout(form_py)
         root.addSpacing(6)
 
-        # ── Abschnitt: Dateisystem ─────────────────────────────────────
+        # ── Abschnitt: Dateisystem ──────────────────────────────────────────
         title_fs, sep_fs = self._section("DATEISYSTEM")
         root.addWidget(title_fs)
         root.addWidget(sep_fs)
@@ -251,9 +251,8 @@ class SettingsDialog(QDialog):
         root.addLayout(form_fs)
         root.addSpacing(6)
 
-        # ── Abschnitt: KI-Tutor (nur wenn Ollama installiert ist) ───────────
-        self._tutor_available = is_ollama_available()
-        title5, sep5 = self._section("KI-TUTOR (INFI)")
+        # ── Abschnitt: KI-Tutor ─────────────────────────────────────────────
+        title5, sep5 = self._section("KI-TUTOR")
         root.addWidget(title5)
         root.addWidget(sep5)
 
@@ -261,33 +260,49 @@ class SettingsDialog(QDialog):
         form_ai.setSpacing(8)
         form_ai.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        if self._tutor_available:
-            self._chk_tutor = QCheckBox("  Infi-Tutor aktivieren")
-            self._chk_tutor.setChecked(tutor_enabled)
-            form_ai.addRow("", self._chk_tutor)
+        self._combo_tutor_mode = QComboBox()
+        self._combo_tutor_mode.addItem("Kein Chatbot", "none")
+        self._combo_tutor_mode.addItem("Lokaler Chatbot (Ollama / Infi)", "ollama")
+        self._combo_tutor_mode.addItem("AIS-Chat (Schule)", "aischat")
+        idx = max(0, self._combo_tutor_mode.findData(tutor_mode))
+        self._combo_tutor_mode.setCurrentIndex(idx)
+        form_ai.addRow("Chatbot:", self._combo_tutor_mode)
+        root.addLayout(form_ai)
 
+        # Ollama-spezifische Felder – nur sichtbar wenn "ollama" gewählt
+        self._ollama_container = QWidget()
+        form_ollama = QFormLayout(self._ollama_container)
+        form_ollama.setSpacing(8)
+        form_ollama.setContentsMargins(0, 4, 0, 0)
+        form_ollama.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        if is_ollama_available():
             self._edit_tutor_url = QLineEdit()
             self._edit_tutor_url.setPlaceholderText(TUTOR_DEFAULT_URL)
             self._edit_tutor_url.setText(tutor_url)
-            form_ai.addRow("Ollama-URL:", self._edit_tutor_url)
+            form_ollama.addRow("Ollama-URL:", self._edit_tutor_url)
 
             self._edit_tutor_model = QLineEdit()
             self._edit_tutor_model.setPlaceholderText(TUTOR_DEFAULT_MODEL)
             self._edit_tutor_model.setText(tutor_model)
-            form_ai.addRow("Modell:", self._edit_tutor_model)
+            form_ollama.addRow("Modell:", self._edit_tutor_model)
         else:
+            self._edit_tutor_url = None
+            self._edit_tutor_model = None
             not_found = QLabel(
                 "Ollama ist nicht installiert.\n"
-                "Bitte Ollama installieren, um den KI-Tutor zu nutzen.\n"
+                "Bitte Ollama installieren, um den lokalen Tutor zu nutzen.\n"
                 "→ https://ollama.com/download"
             )
             not_found.setStyleSheet(
                 f"color:{THEME['text_dim']}; font-size:11px; padding:2px 0;"
             )
             not_found.setWordWrap(True)
-            form_ai.addRow("", not_found)
+            form_ollama.addRow("", not_found)
 
-        root.addLayout(form_ai)
+        root.addWidget(self._ollama_container)
+        self._ollama_container.setVisible(tutor_mode == "ollama")
+        self._combo_tutor_mode.currentIndexChanged.connect(self._on_tutor_mode_changed)
 
         root.addStretch()
 
@@ -355,21 +370,24 @@ class SettingsDialog(QDialog):
     def scrollback_lines(self) -> int:
         return self._spin_sb.value()
 
+    def _on_tutor_mode_changed(self, _index: int):
+        self._ollama_container.setVisible(
+            self._combo_tutor_mode.currentData() == "ollama"
+        )
+
     @property
-    def tutor_enabled(self) -> bool:
-        if not self._tutor_available:
-            return False
-        return self._chk_tutor.isChecked()
+    def tutor_mode(self) -> str:
+        return self._combo_tutor_mode.currentData()
 
     @property
     def tutor_url(self) -> str:
-        if not self._tutor_available:
+        if self._edit_tutor_url is None:
             return ""
         return self._edit_tutor_url.text().strip()
 
     @property
     def tutor_model(self) -> str:
-        if not self._tutor_available:
+        if self._edit_tutor_model is None:
             return ""
         return self._edit_tutor_model.text().strip()
 

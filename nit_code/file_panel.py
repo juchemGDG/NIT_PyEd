@@ -76,10 +76,13 @@ class FilePanel(QWidget):
 
         # Dateimodell
         self._model = QFileSystemModel()
-        self._model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
+        self._model.setFilter(
+            QDir.Filter.AllDirs | QDir.Filter.Files | QDir.Filter.NoDotAndDotDot
+        )
         self._model.setNameFilters(["*.py", "*.txt", "*.json", "*.md", "*.csv",
                                     "*.html", "*.css", "*.js", "*.bin", "*.mpy"])
-        self._model.setNameFilterDisables(False)
+        # Ordner immer sichtbar lassen; nur nicht passende Dateien ausgrauen.
+        self._model.setNameFilterDisables(True)
 
         self._tree = QTreeView()
         self._tree.setModel(self._model)

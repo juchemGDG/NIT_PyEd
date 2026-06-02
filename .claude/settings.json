@@ -11,7 +11,11 @@
       "Bash(.venv/bin/python -m py_compile nit_pyed/config.py nit_pyed/settings_dialog.py nit_pyed/main_window.py nit_pyed/ais_chat_panel.py)",
       "Bash(git rebase *)",
       "Bash(git stash *)",
-      "Bash(.venv/bin/python -m py_compile nit_pyed/ais_chat_panel.py)"
+      "Bash(.venv/bin/python -m py_compile nit_pyed/ais_chat_panel.py)",
+      "Bash(git merge *)",
+      "Bash(git add *)",
+      "Bash(.venv/bin/python -m py_compile nit_code/ais_chat_panel.py nit_code/settings_dialog.py nit_code/main_window.py start.py)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

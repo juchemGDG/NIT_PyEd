@@ -4,14 +4,14 @@ import sys
 import traceback
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings
 from PyQt6.QtGui import (
     QAction, QFont, QIcon, QKeySequence, QColor,
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
-    QComboBox, QFileDialog, QMessageBox, QInputDialog,
+    QComboBox, QFileDialog, QMessageBox, QInputDialog, QMenu,
     QDialog, QPushButton,
 )
 
@@ -198,8 +198,11 @@ class MainWindow(QMainWindow):
         self._settings_tutor_enabled: bool = False
         self._settings_tutor_url: str = ""
         self._settings_tutor_model: str = ""
+        self._settings_sketchbook: str = str(Path.home())
+        self._settings_store = QSettings()
         self._autosave_timer = QTimer(self)
         self._autosave_timer.timeout.connect(self._autosave_all)
+        self._load_persistent_settings()
         self._setup_window()
         self._setup_menubar()
         self._setup_toolbar()
@@ -239,10 +242,13 @@ class MainWindow(QMainWindow):
 
         # ── Datei ──
         m_file = mb.addMenu("Datei")
+        self._m_file = m_file
         self._add_action(m_file, "Neu",          self._new_tab,       "Ctrl+N")
         self._add_action(m_file, "Öffnen …",     self._open_file,     "Ctrl+O")
         self._add_action(m_file, "Speichern",    self._save_file,     "Ctrl+S")
         self._add_action(m_file, "Speichern als …", self._save_file_as, "Ctrl+Shift+S")
+        self._m_sketchbook = m_file.addMenu("Sketchbook")
+        self._m_sketchbook.aboutToShow.connect(self._rebuild_sketchbook_menu)
         m_file.addSeparator()
         self._add_action(m_file, "⚙  Einstellungen …", self._open_settings, "Ctrl+,")
         m_file.addSeparator()
@@ -932,6 +938,7 @@ class MainWindow(QMainWindow):
             tutor_enabled=self._settings_tutor_enabled,
             tutor_url=self._settings_tutor_url,
             tutor_model=self._settings_tutor_model,
+            sketchbook_dir=self._settings_sketchbook,
         )
         if dlg.exec() == SettingsDialog.DialogCode.Accepted:
             self._settings_font_size = dlg.font_size
@@ -944,8 +951,10 @@ class MainWindow(QMainWindow):
             self._settings_tutor_enabled = dlg.tutor_enabled
             self._settings_tutor_url = dlg.tutor_url
             self._settings_tutor_model = dlg.tutor_model
+            self._settings_sketchbook = self._normalize_sketchbook_dir(dlg.sketchbook_dir)
             try:
                 self._apply_settings()
+                self._save_persistent_settings()
             except Exception as exc:
                 traceback.print_exc()
                 QMessageBox.critical(
@@ -953,6 +962,101 @@ class MainWindow(QMainWindow):
                     "Einstellungen",
                     f"Einstellungen konnten nicht angewendet werden:\n{exc}",
                 )
+
+    def _settings_bool(self, key: str, default: bool) -> bool:
+        raw = self._settings_store.value(key, default)
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _settings_int(self, key: str, default: int) -> int:
+        raw = self._settings_store.value(key, default)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
+
+    def _normalize_sketchbook_dir(self, path: str) -> str:
+        candidate = Path(path).expanduser() if path else Path.home()
+        if not candidate.exists() or not candidate.is_dir():
+            return str(Path.home())
+        return str(candidate.resolve())
+
+    def _load_persistent_settings(self):
+        self._settings_font_size = self._settings_int("editor/font_size", self._settings_font_size)
+        self._settings_line_numbers = self._settings_bool("editor/line_numbers", self._settings_line_numbers)
+        self._settings_word_wrap = self._settings_bool("editor/word_wrap", self._settings_word_wrap)
+        self._settings_highlight_line = self._settings_bool("editor/highlight_line", self._settings_highlight_line)
+        self._settings_autosave_secs = self._settings_int("editor/autosave_secs", self._settings_autosave_secs)
+        self._settings_python_exec = str(self._settings_store.value("python/executable", self._settings_python_exec) or "")
+        self._settings_scrollback = self._settings_int("console/scrollback", self._settings_scrollback)
+        self._settings_tutor_enabled = self._settings_bool("tutor/enabled", self._settings_tutor_enabled)
+        self._settings_tutor_url = str(self._settings_store.value("tutor/url", self._settings_tutor_url) or "")
+        self._settings_tutor_model = str(self._settings_store.value("tutor/model", self._settings_tutor_model) or "")
+        self._settings_sketchbook = self._normalize_sketchbook_dir(
+            str(self._settings_store.value("files/sketchbook_dir", self._settings_sketchbook) or "")
+        )
+
+    def _save_persistent_settings(self):
+        self._settings_store.setValue("editor/font_size", self._settings_font_size)
+        self._settings_store.setValue("editor/line_numbers", self._settings_line_numbers)
+        self._settings_store.setValue("editor/word_wrap", self._settings_word_wrap)
+        self._settings_store.setValue("editor/highlight_line", self._settings_highlight_line)
+        self._settings_store.setValue("editor/autosave_secs", self._settings_autosave_secs)
+        self._settings_store.setValue("python/executable", self._settings_python_exec)
+        self._settings_store.setValue("console/scrollback", self._settings_scrollback)
+        self._settings_store.setValue("tutor/enabled", self._settings_tutor_enabled)
+        self._settings_store.setValue("tutor/url", self._settings_tutor_url)
+        self._settings_store.setValue("tutor/model", self._settings_tutor_model)
+        self._settings_store.setValue("files/sketchbook_dir", self._settings_sketchbook)
+        self._settings_store.sync()
+
+    def _choose_sketchbook_dir(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Sketchbook-Ordner wählen",
+            self._settings_sketchbook,
+        )
+        if folder:
+            self._settings_sketchbook = self._normalize_sketchbook_dir(folder)
+            self._save_persistent_settings()
+
+    def _rebuild_sketchbook_menu(self):
+        self._m_sketchbook.clear()
+        self._add_action(self._m_sketchbook, "Sketchbook-Ordner wählen …", self._choose_sketchbook_dir)
+        self._m_sketchbook.addSeparator()
+
+        root = Path(self._settings_sketchbook)
+        if not root.exists() or not root.is_dir():
+            info = self._m_sketchbook.addAction("(Sketchbook-Ordner nicht gefunden)")
+            info.setEnabled(False)
+            return
+
+        has_entries = self._populate_sketchbook_menu(self._m_sketchbook, root)
+        if not has_entries:
+            info = self._m_sketchbook.addAction("(Keine .py-Dateien gefunden)")
+            info.setEnabled(False)
+
+    def _populate_sketchbook_menu(self, menu: QMenu, directory: Path) -> bool:
+        has_entries = False
+        try:
+            children = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return False
+
+        for child in children:
+            if child.is_dir():
+                sub_menu = menu.addMenu(child.name)
+                if not self._populate_sketchbook_menu(sub_menu, child):
+                    sub_menu.setEnabled(False)
+                else:
+                    has_entries = True
+            elif child.is_file() and child.suffix.lower() == ".py":
+                action = menu.addAction(child.name)
+                action.triggered.connect(lambda _checked=False, p=str(child): self._open_file_path(p))
+                has_entries = True
+
+        return has_entries
 
     def _apply_settings(self):
         """Einstellungen auf alle offenen Tabs + Konsole anwenden."""
@@ -1010,4 +1114,5 @@ class MainWindow(QMainWindow):
         for t in list(self._retired_threads):
             if t.isRunning():
                 t.wait(1000)
+        self._save_persistent_settings()
         event.accept()

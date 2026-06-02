@@ -16,7 +16,8 @@
       "Bash(git add *)",
       "Bash(.venv/bin/python -m py_compile nit_code/ais_chat_panel.py nit_code/settings_dialog.py nit_code/main_window.py start.py)",
       "Bash(git commit -m ' *)",
-      "Bash(.venv/bin/python -m py_compile nit_code/main_window.py)"
+      "Bash(.venv/bin/python -m py_compile nit_code/main_window.py)",
+      "Bash(.venv/bin/python -m py_compile nit_code/settings_dialog.py)"
     ]
   }
 }

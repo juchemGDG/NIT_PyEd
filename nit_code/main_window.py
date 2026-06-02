@@ -1661,8 +1661,9 @@ class MainWindow(QMainWindow):
             self._ai_stack.setVisible(True)
             sizes = self._main_splitter.sizes()
             if sizes[2] == 0:
+                from .ais_chat_panel import PANEL_WIDTH
                 total = sum(sizes)
-                self._main_splitter.setSizes([sizes[0], total - sizes[0] - 100, 100])
+                self._main_splitter.setSizes([sizes[0], total - sizes[0] - PANEL_WIDTH, PANEL_WIDTH])
 
     def _autosave_all(self):
         """Alle geänderten, bereits gespeicherten Tabs automatisch speichern."""

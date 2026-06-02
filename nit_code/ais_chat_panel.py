@@ -17,9 +17,12 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from .config import AIS_CHAT_URL, THEME
 
+# Feste Breite des Panels – entspricht der natürlichen Smartphone-Breite
+PANEL_WIDTH = 390
+
 
 class AisChatPanel(QWidget):
-    """Seitliches Panel mit eingebetteter AIS-Chat-Webseite."""
+    """Seitliches Panel mit eingebetteter AIS-Chat-Webseite (feste Breite)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,7 +30,7 @@ class AisChatPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setMinimumWidth(100)
+        self.setFixedWidth(PANEL_WIDTH)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -49,7 +52,6 @@ class AisChatPanel(QWidget):
         layout.addWidget(header)
 
         if _WEBENGINE_AVAILABLE:
-            # Eigenes Profil mit mobilem User-Agent → Server liefert Smartphone-Layout
             self._profile = QWebEngineProfile("ais_chat_panel", self)
             self._profile.setHttpUserAgent(_MOBILE_UA)
             page = QWebEnginePage(self._profile, self)
@@ -72,18 +74,7 @@ class AisChatPanel(QWidget):
             layout.addWidget(info)
             layout.addStretch()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self._view is None:
-            return
-        width = event.size().width()
-        if width > 0:
-            self._view.setZoomFactor(width / 390)
-
     def _inject_viewport(self, *_):
-        """Setzt Viewport einmalig auf 390px (mobiles Layout).
-        Der Zoom-Faktor passt den Inhalt danach per resizeEvent an die Panel-Breite an.
-        """
         if self._view is None:
             return
         self._view.page().runJavaScript("""

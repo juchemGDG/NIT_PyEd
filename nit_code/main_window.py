@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings
 from PyQt6.QtGui import (
-    QAction, QFont, QIcon, QKeySequence, QColor,
+    QAction, QFont, QIcon, QKeySequence, QColor, QPalette,
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -771,10 +771,17 @@ class MainWindow(QMainWindow):
         self._console.set_active_runner(None)
         if self._mode == "micropython":
             self._console.resume_shell()
+            # Nach Lauf/Stop im MicroPython-Modus Dateiliste automatisch aktualisieren.
+            QTimer.singleShot(250, self._refresh_device_files_after_run)
         if code == 0:
             self._console.append_success(f"\n✓  Programm beendet (Code {code})\n")
         else:
             self._console.append_error(f"\n✗  Programm beendet mit Code {code}\n")
+
+    def _refresh_device_files_after_run(self):
+        port = self._get_serial_port(silent=True)
+        if port and hasattr(self, "_device_panel") and self._mode == "micropython":
+            self._device_panel.refresh(port)
 
     # ──────────────────────────────────────────────────────────────────────
     # MicroPython-Aktionen
@@ -948,8 +955,7 @@ class MainWindow(QMainWindow):
                     default_idx = i
                     break
 
-        selected, ok = QInputDialog.getItem(
-            self,
+        selected, ok = self._ask_item_input(
             title,
             "Repository:",
             labels,
@@ -1042,9 +1048,77 @@ class MainWindow(QMainWindow):
         self._process = proc
         proc.start()
 
+    def _is_light_system_palette(self) -> bool:
+        palette = QApplication.instance().palette() if QApplication.instance() else self.palette()
+        return palette.color(QPalette.ColorRole.Window).lightness() >= 128
+
+    def _style_input_dialog_for_light_mode(self, dlg: QInputDialog):
+        if not self._is_light_system_palette():
+            return
+        dlg.setStyleSheet(
+            """
+            QInputDialog QLabel {
+                color: #111827;
+            }
+            QInputDialog QLineEdit,
+            QInputDialog QComboBox,
+            QInputDialog QListView {
+                background: #ffffff;
+                color: #111827;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 4px 6px;
+            }
+            QInputDialog QLineEdit::placeholder {
+                color: #6b7280;
+            }
+            QInputDialog QPushButton {
+                background: #e2e8f0;
+                color: #111827;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QInputDialog QPushButton:hover {
+                background: #cbd5e1;
+            }
+            """
+        )
+
+    def _ask_text_input(self, title: str, label: str, default_text: str = "") -> tuple[str, bool]:
+        dlg = QInputDialog(self)
+        dlg.setInputMode(QInputDialog.InputMode.TextInput)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setTextValue(default_text)
+        self._style_input_dialog_for_light_mode(dlg)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        return dlg.textValue(), ok
+
+    def _ask_item_input(
+        self,
+        title: str,
+        label: str,
+        items: list[str],
+        current_index: int = 0,
+        editable: bool = False,
+    ) -> tuple[str, bool]:
+        if not items:
+            return "", False
+        dlg = QInputDialog(self)
+        dlg.setInputMode(QInputDialog.InputMode.TextInput)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setComboBoxItems(items)
+        dlg.setComboBoxEditable(editable)
+        if 0 <= current_index < len(items):
+            dlg.setTextValue(items[current_index])
+        self._style_input_dialog_for_light_mode(dlg)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        return dlg.textValue(), ok
+
     def _git_clone(self):
-        url, ok = QInputDialog.getText(
-            self,
+        url, ok = self._ask_text_input(
             "Git: Repository klonen",
             "Repository-URL (HTTPS/SSH):",
         )
@@ -1053,11 +1127,10 @@ class MainWindow(QMainWindow):
         url = url.strip()
 
         default_target = os.path.basename(url.rstrip("/")).removesuffix(".git") or "projekt"
-        target_name, ok = QInputDialog.getText(
-            self,
+        target_name, ok = self._ask_text_input(
             "Git: Zielordner",
             "Ordnername im Sketchbook:",
-            text=default_target,
+            default_target,
         )
         if not ok or not target_name.strip():
             return
@@ -1130,8 +1203,7 @@ class MainWindow(QMainWindow):
         except ValueError:
             default_idx = 0
 
-        target, ok = QInputDialog.getItem(
-            self,
+        target, ok = self._ask_item_input(
             "Git: Branch wechseln",
             "Branch:",
             branches,
@@ -1198,7 +1270,87 @@ class MainWindow(QMainWindow):
         repo = self._require_git_repo()
         if not repo:
             return
-        self._run_git_process(["git", "pull"], cwd=repo, label="Pull")
+        if self._ensure_pull_upstream(repo):
+            self._run_git_process(["git", "pull"], cwd=repo, label="Pull")
+
+    def _ensure_pull_upstream(self, repo: str) -> bool:
+        subprocess.run(
+            ["git", "-C", repo, "fetch", "--all", "--prune"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        current = self._get_current_branch(repo)
+        if not current or current == "HEAD":
+            return True
+
+        upstream = self._get_upstream_branch(repo)
+        remote_branches = self._get_remote_origin_branches(repo)
+        if not remote_branches:
+            return True
+
+        if upstream and upstream in remote_branches:
+            return True
+
+        if upstream and upstream.startswith("origin/"):
+            missing = upstream
+        elif upstream:
+            missing = upstream
+        else:
+            missing = "(kein Upstream gesetzt)"
+
+        msg = (
+            f"Für den lokalen Branch '{current}' ist der Upstream '{missing}' nicht verfügbar.\n\n"
+            "Bitte wähle einen Remote-Branch, der als neuer Upstream gesetzt werden soll."
+        )
+        selected, ok = self._ask_item_input(
+            "Git: Upstream reparieren",
+            msg,
+            remote_branches,
+            0,
+            False,
+        )
+        if not ok or not selected:
+            return False
+
+        self._run_git_process(
+            ["git", "branch", "--set-upstream-to", selected, current],
+            cwd=repo,
+            label=f"Upstream setzen ({current} -> {selected})",
+            on_success=lambda: self._run_git_process(["git", "pull"], cwd=repo, label="Pull"),
+        )
+        return False
+
+    def _get_upstream_branch(self, repo: str) -> str | None:
+        res = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return None
+        value = res.stdout.strip()
+        return value or None
+
+    def _get_remote_origin_branches(self, repo: str) -> list[str]:
+        res = subprocess.run(
+            ["git", "-C", repo, "for-each-ref", "--format", "%(refname:short)", "refs/remotes/origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            return []
+        branches = []
+        for line in res.stdout.splitlines():
+            branch = line.strip()
+            if not branch or branch == "origin/HEAD":
+                continue
+            branches.append(branch)
+        branches.sort(key=lambda b: b.casefold())
+        return branches
 
     def _git_push(self):
         repo = self._require_git_repo()
@@ -1210,8 +1362,7 @@ class MainWindow(QMainWindow):
         repo = self._require_git_repo()
         if not repo:
             return
-        msg, ok = QInputDialog.getText(
-            self,
+        msg, ok = self._ask_text_input(
             "Git: Commit",
             "Commit-Nachricht:",
         )

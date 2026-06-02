@@ -474,7 +474,7 @@ class MainWindow(QMainWindow):
         self._ai_stack.setVisible(False)
         self._main_splitter.addWidget(self._ai_stack)
 
-        self._main_splitter.setSizes([200, 1060, 0])
+        self._main_splitter.setSizes([120, 1060, 0])
 
         root_layout.addWidget(self._main_splitter)
 

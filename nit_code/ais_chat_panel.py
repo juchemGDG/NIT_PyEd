@@ -77,10 +77,25 @@ class AisChatPanel(QWidget):
         self._inject_viewport()
 
     def _inject_viewport(self, *_):
-        """Setzt Viewport auf die aktuelle Widget-Breite in Pixeln."""
+        """Passt Viewport und Zoom an die aktuelle Panel-Breite an.
+
+        Über 390px: Seite füllt die volle Breite.
+        Unter 390px: Seite rendert auf 390px und wird herausgezoomt –
+        kein horizontales Scrollen, kein abgeschnittener Inhalt.
+        """
         if self._view is None:
             return
-        width = max(self._view.width(), 200)
+        width = self._view.width()
+        if width < 1:
+            return
+        mobile_base = 390
+        if width >= mobile_base:
+            viewport_width = width
+            zoom = 1.0
+        else:
+            viewport_width = mobile_base
+            zoom = width / mobile_base
+        self._view.setZoomFactor(zoom)
         self._view.page().runJavaScript(f"""
             (function() {{
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -89,6 +104,6 @@ class AisChatPanel(QWidget):
                     meta.name = 'viewport';
                     document.head.appendChild(meta);
                 }}
-                meta.content = 'width={width}, initial-scale=1.0';
+                meta.content = 'width={viewport_width}, initial-scale=1.0';
             }})();
         """)

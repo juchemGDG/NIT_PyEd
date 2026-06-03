@@ -25,8 +25,25 @@ GitHub-Repository: https://github.com/juchemGDG/NIT_Code
 
 ## Voraussetzungen
 
-- **Python 3.10+** muss installiert sein
+- Für die **Download-Versionen**: keine Python-Installation erforderlich
 - Für MicroPython-Funktionen: Controller per USB anschließen
+
+---
+
+## Download & Installation (empfohlen)
+
+Aktuelle Versionen stehen auf der GitHub-Release-Seite bereit:
+
+- Release-Übersicht: https://github.com/juchemGDG/NIT_Code/releases/latest
+- **Windows (.exe):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code.exe
+- **macOS (.dmg):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code-macos.dmg
+- **Linux (.tar.gz):** https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code-linux-x86_64.tar.gz
+
+### Schnellstart
+
+- **Windows:** `NIT_Code.exe` herunterladen und starten
+- **macOS:** `NIT_Code-macos.dmg` öffnen, App in Programme ziehen, dann starten
+- **Linux:** Archiv entpacken und die enthaltene Startdatei im Ordner `NIT_Code` ausführen
 
 ---
 
@@ -83,7 +100,9 @@ ollama pull llama3.2
 
 ---
 
-## Starten
+## Starten aus Quellcode (für Entwicklung)
+
+Für diese Variante ist **Python 3.10+** erforderlich.
 
 ### Linux / macOS
 ```bash

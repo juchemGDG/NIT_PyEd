@@ -10,7 +10,14 @@ from .main_window import MainWindow, GLOBAL_STYLE
 
 def _find_logo() -> QIcon:
     """Sucht logo.png im Paket- oder Projektordner."""
-    candidates = [
+    candidates = []
+    if getattr(sys, 'frozen', False):
+        # PyInstaller-Bundle: logo.png liegt neben der EXE in nit_code/
+        exe_dir = Path(sys.executable).parent
+        candidates.append(exe_dir / "nit_code" / "logo.png")
+        if hasattr(sys, '_MEIPASS'):
+            candidates.append(Path(sys._MEIPASS) / "nit_code" / "logo.png")
+    candidates += [
         Path(__file__).resolve().parent / "logo.png",          # nit_code/logo.png
         Path(__file__).resolve().parent.parent / "logo.png",    # Projektordner/logo.png
     ]

@@ -811,7 +811,7 @@ class MainWindow(QMainWindow):
 
         remote_name = os.path.basename(tab.filepath)
         self._console.append_info(f"↑  Lade {remote_name} auf {port} hoch ...\n")
-        cmd = [sys.executable, "-m", "mpremote", "connect", port,
+        cmd = [self._get_python_executable(), "-m", "mpremote", "connect", port,
                "cp", tab.filepath, f":{remote_name}"]
         self._retire_process()
         self._process = ProcessRunner(cmd)
@@ -840,7 +840,7 @@ class MainWindow(QMainWindow):
             "print('MicroPython', sys.version, 'auf', sys.platform); "
             "print('Implementation:', v.name, v.version)"
         )
-        cmd = [sys.executable, "-m", "mpremote", "connect", port, "exec", code]
+        cmd = [self._get_python_executable(), "-m", "mpremote", "connect", port, "exec", code]
         proc = ProcessRunner(cmd)
         proc.output.connect(
             lambda text, kind: (
@@ -868,7 +868,7 @@ class MainWindow(QMainWindow):
             return
         self._console.append_info(f"🔄  Starte Controller auf {port} neu ...\n")
         cmd = [
-            sys.executable, "-m", "mpremote",
+            self._get_python_executable(), "-m", "mpremote",
             "connect", port, "reset",
         ]
         proc = ProcessRunner(cmd)
@@ -1402,6 +1402,11 @@ class MainWindow(QMainWindow):
     # Hilfsfunktionen
     # ──────────────────────────────────────────────────────────────────────
     def _get_python_executable(self) -> str:
+        if getattr(sys, 'frozen', False):
+            # In PyInstaller-Bundle ist sys.executable die App-EXE, kein Python-Interpreter.
+            # System-Python suchen, damit die Shell nicht die App neu startet.
+            python = shutil.which("python3") or shutil.which("python")
+            return python or ("python3" if sys.platform != "win32" else "python")
         venv_py = Path(__file__).parents[1] / ".venv" / (
             "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
         )

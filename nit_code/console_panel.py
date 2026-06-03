@@ -317,7 +317,10 @@ class ShellWidget(QWidget):
         self._current_cmd: list = [sys.executable, "-i"]
         self._text_ready.connect(self._do_append)
         self._setup_ui()
-        self._start_shell([sys.executable, "-i"])  # Standard: Python REPL
+        # In PyInstaller-Bundles ist sys.executable die App-EXE, kein Python-Interpreter.
+        # Die Shell wird dann über set_shell_mode() mit dem System-Python gestartet.
+        if not getattr(sys, 'frozen', False):
+            self._start_shell([sys.executable, "-i"])  # Standard: Python REPL
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)

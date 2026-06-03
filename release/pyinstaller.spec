@@ -24,8 +24,30 @@ if os.path.exists(logo_path):
     datas.append((logo_path, 'nit_code'))
 
 icon_file = None
-if sys.platform == 'darwin':
+if sys.platform == 'win32' and os.path.exists(logo_path):
+    from PIL import Image
+    ico_path = os.path.join(spec_dir, 'NIT_Code.ico')
+    if not os.path.exists(ico_path):
+        img = Image.open(logo_path).convert('RGBA')
+        img.save(ico_path, format='ICO',
+                 sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
+    if os.path.exists(ico_path):
+        icon_file = ico_path
+elif sys.platform == 'darwin' and os.path.exists(logo_path):
+    import subprocess, tempfile
     icns_path = os.path.join(spec_dir, 'NIT_Code.icns')
+    if not os.path.exists(icns_path):
+        iconset_dir = os.path.join(tempfile.mkdtemp(), 'NIT_Code.iconset')
+        os.makedirs(iconset_dir)
+        for size in [16, 32, 128, 256, 512]:
+            subprocess.run(['sips', '-z', str(size), str(size), logo_path,
+                            '--out', os.path.join(iconset_dir, f'icon_{size}x{size}.png')],
+                           capture_output=True)
+            double = size * 2
+            subprocess.run(['sips', '-z', str(double), str(double), logo_path,
+                            '--out', os.path.join(iconset_dir, f'icon_{size}x{size}@2x.png')],
+                           capture_output=True)
+        subprocess.run(['iconutil', '-c', 'icns', iconset_dir, '-o', icns_path], check=True)
     if os.path.exists(icns_path):
         icon_file = icns_path
 
@@ -60,6 +82,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
+    icon=icon_file,
 )
 
 coll = COLLECT(

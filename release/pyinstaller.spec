@@ -23,6 +23,12 @@ datas = []
 if os.path.exists(logo_path):
     datas.append((logo_path, 'nit_code'))
 
+icon_file = None
+if sys.platform == 'darwin':
+    icns_path = os.path.join(spec_dir, 'NIT_Code.icns')
+    if os.path.exists(icns_path):
+        icon_file = icns_path
+
 a = Analysis(
     [entry_script],
     pathex=[project_root],
@@ -70,7 +76,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='NIT_Code.app',
-        icon=None,
+        icon=icon_file,
         bundle_identifier='de.nit.nitcode',
         info_plist={
             'CFBundleName': 'NIT_Code',

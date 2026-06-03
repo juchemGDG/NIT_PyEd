@@ -1,4 +1,6 @@
 """Entry point used by PyInstaller builds."""
+import multiprocessing
+multiprocessing.freeze_support()
 
 from nit_code.main import main
 

@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QSplitter, QTabWidget,
 )
 
-from .config import THEME
+from .config import THEME, python_executable
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -314,13 +314,13 @@ class ShellWidget(QWidget):
         self._hist_idx = 0
         self._proc: subprocess.Popen | None = None
         self._master_fd: int | None = None   # PTY master (Unix)
-        self._current_cmd: list = [sys.executable, "-i"]
+        self._current_cmd: list = [python_executable(), "-i"]
         self._text_ready.connect(self._do_append)
         self._setup_ui()
         # In PyInstaller-Bundles ist sys.executable die App-EXE, kein Python-Interpreter.
         # Die Shell wird dann über set_shell_mode() mit dem System-Python gestartet.
         if not getattr(sys, 'frozen', False):
-            self._start_shell([sys.executable, "-i"])  # Standard: Python REPL
+            self._start_shell([python_executable(), "-i"])  # Standard: Python REPL
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -682,7 +682,7 @@ class ConsolePanel(QWidget):
     def set_shell_mode(self, mode: str, port: str = "", python_exec: str = ""):
         """Setzt Shell-Modus. mpremote-REPL wird erst beim Tab-Klick gestartet."""
         if mode == "micropython" and port:
-            cmd = [sys.executable, "-m", "mpremote", "connect", port]
+            cmd = [python_executable(), "-m", "mpremote", "connect", port]
             label = f"Shell  –  MicroPython REPL ({port})"
             self._shell_is_micropython = True
             self.shell.stop()                 # alten Prozess beenden
@@ -694,7 +694,7 @@ class ConsolePanel(QWidget):
                 # Lazy: erst beim nächsten Tab-Klick starten
                 self._shell_pending_cmd = cmd
         else:
-            exe = python_exec or sys.executable
+            exe = python_exec or python_executable()
             cmd = [exe, "-i"]
             label = "Shell  –  Python REPL"
             self._shell_is_micropython = False

@@ -22,7 +22,8 @@
       "Bash(.venv/bin/python -m py_compile nit_code/ais_chat_panel.py nit_code/main_window.py)",
       "Bash(xargs ls -la)",
       "Bash(rm -f '=10.0')",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python -m py_compile nit_code/config.py nit_code/console_panel.py nit_code/file_panel.py nit_code/micropython_dialogs.py nit_code/main_window.py nit_code/main.py release/launcher.py)"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_PyEd"

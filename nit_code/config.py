@@ -1,8 +1,34 @@
 """Konstanten und Konfiguration für NIT_Code."""
 import shutil
+import sys
+from pathlib import Path
+
+
+def python_executable() -> str:
+    """Liefert einen echten Python-Interpreter zum Starten von Subprozessen.
+
+    WICHTIG: In einem PyInstaller-Bundle ist ``sys.executable`` die App selbst
+    (z. B. ``NIT_Code.app/Contents/MacOS/NIT_Code``) und KEIN Python-Interpreter.
+    Würde man sie als Interpreter starten (``[sys.executable, "-i"]`` o. ä.),
+    ignoriert der Bootloader die Argumente und startet die GUI rekursiv neu –
+    eine Endlosschleife / Fork-Bomb, die den Rechner zum Absturz bringen kann.
+
+    Im Frozen-Modus wird daher der System-Python gesucht; im normalen Modus
+    der venv-Python bzw. der laufende Interpreter.
+    """
+    if getattr(sys, "frozen", False):
+        found = shutil.which("python3") or shutil.which("python")
+        return found or ("python" if sys.platform == "win32" else "python3")
+    venv_py = Path(__file__).resolve().parents[1] / ".venv" / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    if venv_py.exists():
+        return str(venv_py)
+    return sys.executable
+
 
 APP_NAME = "NIT_Code"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 # GitHub-Repository für Bibliotheken
 LIB_REPO_API = "https://api.github.com/repos/juchemGDG/NIT_Bibliotheken/contents"

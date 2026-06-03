@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QDialog, QPushButton, QTextEdit,
 )
 
-from .config import APP_NAME, APP_VERSION, THEME, SUPPORTED_BOARDS
+from .config import APP_NAME, APP_VERSION, THEME, SUPPORTED_BOARDS, python_executable
 from .editor_widget import CodeEditor
 from .file_panel import FilePanel, DeviceFilePanel
 from .console_panel import ConsolePanel, ProcessRunner, MicroPythonRunner
@@ -1402,17 +1402,9 @@ class MainWindow(QMainWindow):
     # Hilfsfunktionen
     # ──────────────────────────────────────────────────────────────────────
     def _get_python_executable(self) -> str:
-        if getattr(sys, 'frozen', False):
-            # In PyInstaller-Bundle ist sys.executable die App-EXE, kein Python-Interpreter.
-            # System-Python suchen, damit die Shell nicht die App neu startet.
-            python = shutil.which("python3") or shutil.which("python")
-            return python or ("python3" if sys.platform != "win32" else "python")
-        venv_py = Path(__file__).parents[1] / ".venv" / (
-            "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
-        )
-        if venv_py.exists():
-            return str(venv_py)
-        return sys.executable
+        # Zentrale Helper-Funktion: liefert im Frozen-Modus System-Python,
+        # damit Subprozesse nicht die App neu starten (Fork-Bomb).
+        return python_executable()
 
     def _refresh_ports(self):
         """Scannt serielle Ports und aktualisiert die Combo-Box in der Toolbar."""

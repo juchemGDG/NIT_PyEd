@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QColor
 
-from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_API, LIB_REPO_RAW
+from .config import THEME, SUPPORTED_BOARDS, LIB_REPO_API, LIB_REPO_RAW, python_executable
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Hilfsstil
@@ -119,7 +119,7 @@ class FlashWorker(QThread):
 
         if flash_cmd == "esp32":
             cmd = [
-                sys.executable, "-m", "esptool",
+                python_executable(), "-m", "esptool",
                 "--chip", "esp32",
                 "--port", self.port,
                 "--baud", str(baud),
@@ -133,7 +133,7 @@ class FlashWorker(QThread):
             self._flash_microbit()
             return
         else:
-            cmd = [sys.executable, "-m", "esptool", "--port", self.port,
+            cmd = [python_executable(), "-m", "esptool", "--port", self.port,
                    "write_flash", "0x0", self.firmware_path]
 
         try:
@@ -710,7 +710,7 @@ class LibInstallWorker(QThread):
 
                     self.log.emit(f"Übertrage {name} auf Controller ({self.port}) ...\n")
                     result = subprocess.run(
-                        [sys.executable, "-m", "mpremote", "connect", self.port,
+                        [python_executable(), "-m", "mpremote", "connect", self.port,
                          "cp", tmp_path, f":{name}"],
                         capture_output=True, text=True, timeout=30
                     )
@@ -993,7 +993,7 @@ class _PipWorker(QThread):
         import subprocess, sys
         for pkg in self._packages:
             self.log.emit(f"{'Installiere' if self._action == 'install' else 'Deinstalliere'} {pkg} …\n")
-            cmd = [sys.executable, "-m", "pip", self._action, pkg]
+            cmd = [python_executable(), "-m", "pip", self._action, pkg]
             if self._action == "uninstall":
                 cmd.append("-y")
             try:
@@ -1143,7 +1143,7 @@ class PipManagerDialog(QDialog):
         self._log.append("Lade installierte Pakete …")
         try:
             r = subprocess.run(
-                [sys.executable, "-m", "pip", "list", "--format=columns"],
+                [python_executable(), "-m", "pip", "list", "--format=columns"],
                 capture_output=True, text=True, timeout=15,
             )
             lines = r.stdout.splitlines()[2:]   # Header überspringen

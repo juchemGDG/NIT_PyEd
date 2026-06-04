@@ -1,6 +1,6 @@
 """Code-Editor-Widget auf Basis von QScintilla mit Python/MicroPython Syntax-Highlighting."""
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QKeySequence
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 try:
@@ -13,6 +13,7 @@ except ImportError:
     HAS_QSCI = False
 
 from .config import THEME
+from .completion import JediCompleter, HAS_JEDI
 
 
 def _hex(color: str) -> QColor:
@@ -26,6 +27,7 @@ class CodeEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._filepath: str | None = None
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -40,6 +42,7 @@ class CodeEditor(QWidget):
         if HAS_QSCI:
             self.sci = QsciScintilla(self)
             self._configure_scintilla()
+            self._setup_completion()
             layout.addWidget(self.sci)
         else:
             from PyQt6.QtWidgets import QPlainTextEdit
@@ -209,6 +212,83 @@ class CodeEditor(QWidget):
         """Aktuelle Zeile hervorheben ein- oder ausschalten."""
         if HAS_QSCI:
             self.sci.setCaretLineVisible(enabled)
+
+    def set_filepath(self, path: str | None):
+        """Aktuellen Dateipfad setzen – verbessert jedi-Projekterkennung."""
+        self._filepath = path
+
+    def set_extra_completion_paths(self, paths: list[str]):
+        """Zusätzliche Suchpfade für jedi (z. B. MicroPython-Stubs)."""
+        if hasattr(self, "_completer"):
+            self._completer.set_extra_paths(paths)
+
+    # ------------------------------------------------------------------
+    # Autovervollständigung (jedi)
+    # ------------------------------------------------------------------
+    def _setup_completion(self):
+        sci = self.sci
+
+        # QScintilla: Einzel-Auswahl sofort einfügen deaktivieren (wir steuern selbst)
+        sci.setAutoCompletionUseSingle(QsciScintilla.AutoCompletionUseSingle.AcusNever)
+
+        self._completer = JediCompleter(self)
+        self._completer.completions_ready.connect(self._show_completions)
+
+        self._completion_timer = QTimer(self)
+        self._completion_timer.setSingleShot(True)
+        self._completion_timer.timeout.connect(self._request_completion)
+
+        sci.SCN_CHARADDED.connect(self._on_char_added)
+        sci.SCN_USERLISTSELECTION.connect(self._on_completion_selected)
+
+        # Ctrl+Space: Vervollständigung manuell auslösen
+        shortcut = QShortcut(QKeySequence("Ctrl+Space"), sci)
+        shortcut.activated.connect(self._request_completion)
+
+    def _on_char_added(self, char: int):
+        ch = chr(char) if 0 < char < 128 else ""
+        if ch in (" ", "\n", "\r", "\t", ")", "]", "}", ";", ","):
+            self._completion_timer.stop()
+            return
+        # Kürzere Wartezeit beim Punkt (Attributzugriff)
+        self._completion_timer.setInterval(150 if ch == "." else 400)
+        self._completion_timer.start()
+
+    def _request_completion(self):
+        sci = self.sci
+        line, col = sci.getCursorPosition()
+        # Mindestens 1 Zeichen des aktuellen Bezeichners getippt
+        line_text = sci.text(line)
+        word_start = col
+        while word_start > 0 and (line_text[word_start - 1].isalnum() or line_text[word_start - 1] == "_"):
+            word_start -= 1
+        # Bei reinem Punkt (col direkt nach '.') auch auslösen
+        at_dot = col > 0 and line_text[col - 1] == "."
+        if col - word_start < 1 and not at_dot:
+            return
+        self._completer.request(sci.text(), line, col, self._filepath)
+
+    def _show_completions(self, completions: list):
+        if not completions or not HAS_QSCI:
+            return
+        names = [name for name, _ in completions]
+        try:
+            self.sci.showUserList(1, names)
+        except Exception:
+            pass
+
+    def _on_completion_selected(self, text: str, list_id: int, *_args):
+        if list_id != 1:
+            return
+        sci = self.sci
+        line, col = sci.getCursorPosition()
+        line_text = sci.text(line)
+        # Aktuellen Bezeichner (ohne Punkt) ermitteln und ersetzen
+        word_start = col
+        while word_start > 0 and (line_text[word_start - 1].isalnum() or line_text[word_start - 1] == "_"):
+            word_start -= 1
+        sci.setSelection(line, word_start, line, col)
+        sci.replaceSelectedText(text)
 
     def comment_selection(self):
         """Markierte Zeilen mit # auskommentieren."""

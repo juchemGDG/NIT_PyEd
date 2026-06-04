@@ -23,7 +23,18 @@
       "Bash(xargs ls -la)",
       "Bash(rm -f '=10.0')",
       "Bash(git push *)",
-      "Bash(python -m py_compile nit_code/config.py nit_code/console_panel.py nit_code/file_panel.py nit_code/micropython_dialogs.py nit_code/main_window.py nit_code/main.py release/launcher.py)"
+      "Bash(python -m py_compile nit_code/config.py nit_code/console_panel.py nit_code/file_panel.py nit_code/micropython_dialogs.py nit_code/main_window.py nit_code/main.py release/launcher.py)",
+      "Bash(gh release *)",
+      "Bash(gh run *)",
+      "Bash(git ls-remote *)",
+      "Bash(git tag *)",
+      "Bash(echo \"===EXIT: $?===\")",
+      "Bash(curl -sI -o /dev/null -w \"%{http_code} -> %{redirect_url}\\\\n\" https://github.com/juchemGDG/NIT_Code/releases/latest/download/NIT_Code-macos.dmg)",
+      "Bash(python -c \"import esptool, mpremote; print\\('mpremote', mpremote.__file__\\); print\\('esptool', esptool.__file__\\)\")",
+      "Bash(python -c \"import esptool; print\\([n for n in dir\\(esptool\\) if 'main' in n.lower\\(\\)]\\)\")",
+      "Bash(python -m py_compile nit_code/config.py nit_code/file_panel.py nit_code/console_panel.py nit_code/main_window.py nit_code/micropython_dialogs.py release/launcher.py)",
+      "Bash(python -m py_compile release/pyinstaller.spec)",
+      "Bash(python -c \"import inspect,mpremote.main as m; print\\(inspect.signature\\(m.main\\)\\)\")"
     ],
     "additionalDirectories": [
       "/workspaces/NIT_PyEd"

@@ -277,18 +277,29 @@ class CodeEditor(QWidget):
         except Exception:
             pass
 
-    def _on_completion_selected(self, text: str, list_id: int, *_args):
+    def _on_completion_selected(self, text, list_id: int, *_args):
         if list_id != 1:
             return
-        sci = self.sci
-        line, col = sci.getCursorPosition()
-        line_text = sci.text(line)
-        # Aktuellen Bezeichner (ohne Punkt) ermitteln und ersetzen
-        word_start = col
-        while word_start > 0 and (line_text[word_start - 1].isalnum() or line_text[word_start - 1] == "_"):
-            word_start -= 1
-        sci.setSelection(line, word_start, line, col)
-        sci.replaceSelectedText(text)
+        # QScintilla liefert den Text auf manchen Plattformen als bytes (char const*)
+        if isinstance(text, bytes):
+            text = text.decode("utf-8", errors="replace")
+        # Insertion auf den nächsten Event-Loop verschieben:
+        # direktes setSelection/replaceSelectedText im Signal-Handler führt auf
+        # macOS zu einem reentrant QScintilla-Aufruf → abort()
+        QTimer.singleShot(0, lambda t=text: self._insert_completion(t))
+
+    def _insert_completion(self, text: str):
+        try:
+            sci = self.sci
+            line, col = sci.getCursorPosition()
+            line_text = sci.text(line)
+            word_start = col
+            while word_start > 0 and (line_text[word_start - 1].isalnum() or line_text[word_start - 1] == "_"):
+                word_start -= 1
+            sci.setSelection(line, word_start, line, col)
+            sci.replaceSelectedText(text)
+        except Exception:
+            pass
 
     def comment_selection(self):
         """Markierte Zeilen mit # auskommentieren."""

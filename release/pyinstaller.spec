@@ -2,6 +2,9 @@
 import os
 import sys
 
+sys.path.insert(0, os.path.join(SPECPATH, ".."))
+from nit_code.config import APP_VERSION
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
@@ -119,7 +122,7 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'NIT_Code',
             'CFBundleDisplayName': 'NIT_Code',
-            'CFBundleShortVersionString': '1.1.3',
-            'CFBundleVersion': '1.1.3',
+            'CFBundleShortVersionString': APP_VERSION,
+            'CFBundleVersion': APP_VERSION,
         },
     )

@@ -734,33 +734,9 @@ class MainWindow(QMainWindow):
             self._left_splitter.setSizes([600, 0])
             self._console.set_shell_mode("python",
                                          python_exec=self._get_python_executable())
-        self._update_completion_paths(is_upy)
 
     def _set_board(self, board_id: str):
         self._board = board_id
-
-    def _get_micropython_stub_paths(self) -> list[str]:
-        """Gibt installierte MicroPython-Stub-Pfade zurück (falls vorhanden)."""
-        paths: list[str] = []
-        try:
-            import importlib.util
-            # micropython-stubs von Josverl (pip install micropython-stubs)
-            spec = importlib.util.find_spec("micropython_stubs")
-            if spec and spec.submodule_search_locations:
-                paths.extend(spec.submodule_search_locations)
-            # Alternativ: micropython (direkte Stubs)
-            spec2 = importlib.util.find_spec("micropython")
-            if spec2 and spec2.submodule_search_locations:
-                paths.extend(spec2.submodule_search_locations)
-        except Exception:
-            pass
-        return paths
-
-    def _update_completion_paths(self, micropython_mode: bool):
-        """Setzt die jedi-Suchpfade für alle offenen Tabs je nach Modus."""
-        paths = self._get_micropython_stub_paths() if micropython_mode else []
-        for tab in self._tabs:
-            tab.editor.set_extra_completion_paths(paths)
 
     # ──────────────────────────────────────────────────────────────────────
     # Programmausführung

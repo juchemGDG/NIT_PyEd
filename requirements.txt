@@ -6,3 +6,5 @@ mpremote>=1.22.0
 requests>=2.31.0
 pyserial>=3.5
 jedi>=0.19.0
+micropython-esp32-stubs>=1.28.0
+micropython-rp2-stubs>=1.28.0

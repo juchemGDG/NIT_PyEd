@@ -307,8 +307,17 @@ class GitCloneDialog(QDialog):
             QPushButton:default:hover { background: #2563eb; }
         """)
 
+    @staticmethod
+    def _clean_url(text: str) -> str:
+        """Bereinigt versehentlich eingefügte 'git clone <url>'-Befehle zur reinen URL."""
+        text = text.strip()
+        # Nutzer kopieren oft den kompletten Befehl von GitHub/Doku
+        import re
+        text = re.sub(r"^git\s+clone\s+", "", text, flags=re.IGNORECASE).strip()
+        return text
+
     def _on_url_changed(self, text: str):
-        url = text.strip()
+        url = self._clean_url(text)
         if not self._target_manually_edited:
             name = os.path.basename(url.rstrip("/")).removesuffix(".git")
             if name:
@@ -326,7 +335,7 @@ class GitCloneDialog(QDialog):
         self.adjustSize()
 
     def url(self) -> str:
-        return self._url_edit.text().strip()
+        return self._clean_url(self._url_edit.text())
 
     def target_name(self) -> str:
         return self._target_edit.text().strip()

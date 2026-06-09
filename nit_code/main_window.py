@@ -5,7 +5,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, quote as urlquote
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings
 from PyQt6.QtGui import (
@@ -1364,11 +1364,15 @@ class MainWindow(QMainWindow):
         display_url = url
         if username and password and url.startswith(("https://", "http://")):
             parsed = urlparse(url)
-            netloc = f"{username}:{password}@{parsed.hostname}"
+            # Sonderzeichen (z. B. @ in E-Mail-Adressen) müssen URL-kodiert werden
+            enc_user = urlquote(username, safe="")
+            enc_pass = urlquote(password, safe="")
+            host = parsed.hostname
+            netloc = f"{enc_user}:{enc_pass}@{host}"
             if parsed.port:
                 netloc += f":{parsed.port}"
             clone_url = urlunparse(parsed._replace(netloc=netloc))
-            display_url = urlunparse(parsed._replace(netloc=f"{username}:***@{parsed.hostname}"))
+            display_url = urlunparse(parsed._replace(netloc=f"{enc_user}:***@{host}"))
 
         clone_cmd = ["git", "clone", clone_url, target]
         display_cmd = ["git", "clone", display_url, target]
@@ -1396,12 +1400,14 @@ class MainWindow(QMainWindow):
         )
         # In ~/.git-credentials schreiben (Format: https://user:pass@hostname)
         parsed = urlparse(url)
-        cred_line = f"{parsed.scheme}://{username}:{password}@{parsed.hostname}\n"
+        enc_user = urlquote(username, safe="")
+        enc_pass = urlquote(password, safe="")
+        cred_line = f"{parsed.scheme}://{enc_user}:{enc_pass}@{parsed.hostname}\n"
         creds_file = Path.home() / ".git-credentials"
         try:
             existing = creds_file.read_text(encoding="utf-8") if creds_file.exists() else ""
             # Bestehenden Eintrag für denselben Host ersetzen oder neu anfügen
-            host_prefix = f"{parsed.scheme}://{username}:"
+            host_prefix = f"{parsed.scheme}://{enc_user}:"
             lines = [ln for ln in existing.splitlines(keepends=True) if not ln.startswith(host_prefix)]
             lines.append(cred_line)
             creds_file.write_text("".join(lines), encoding="utf-8")

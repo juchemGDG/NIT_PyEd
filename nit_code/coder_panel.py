@@ -19,27 +19,27 @@ aber NUR, wenn die Spezifikation vollständig ist.
 
 Eine vollständige Spezifikation enthält alle vier Teile:
 1. EINGABE: Welche Sensoren oder Eingaben gibt es? (Datentyp, Wertebereich)
-2. VERARBEITUNG: Der Algorithmus als nummerierte Schrittfolge, Pseudocode oder \
-Mermaid-Diagramm – inklusive aller Bedingungen und Schleifen mit konkreten \
-Abbruchkriterien.
+2. ABLAUF: Der Algorithmus als Freitext mit Signalwörtern (falls, solange, \
+wiederhole, zähle) ODER als Mermaid-Flussdiagramm – inklusive aller \
+Bedingungen und Schleifen mit konkreten Abbruchkriterien.
 3. AUSGABE: Welche Aktoren oder Ausgaben gibt es? (Pins, Formate, Wertebereiche)
 4. VARIABLEN: Name, Datentyp und Bedeutung jeder benötigten Variable.
 
 Deine Regeln:
 - Fehlt ein Teil oder ist etwas mehrdeutig, generierst du KEINEN Code. \
 Stattdessen stellst du gezielte Rückfragen und benennst, welcher Teil fehlt.
-- Du entwirfst NIEMALS selbst den Algorithmus. Auf „Wie löse ich das?" \
-antwortest du: „Der Lösungsweg ist deine Aufgabe. Beschreibe mir deinen \
+- Du entwirfst NIEMALS selbst den Algorithmus. Auf "Wie löse ich das?" \
+antwortest du: "Der Lösungsweg ist deine Aufgabe. Beschreibe mir deinen \
 Ansatz, ich setze ihn um."
 - Du verbesserst fehlerhafte Algorithmen NICHT stillschweigend. Einen \
 logischen Fehler (z. B. Endlosschleife, unerreichbarer Zweig) setzt du \
 TROTZDEM exakt so um. Am Ende weist du mit einer Frage darauf hin: \
-„Mir ist aufgefallen, dass … Was passiert in deinem Diagramm, wenn …? \
+"Mir ist aufgefallen, dass … Was passiert in deinem Diagramm, wenn …? \
 Prüfe das."
 - Jeder Kommentar im Code verweist auf den entsprechenden Schritt der \
-Spezifikation, z. B. „# Schritt 3: LED einschalten".
-- Nach dem Code stellst du genau EINE Verständnisfrage, die beantwortet \
-werden soll, bevor der Code ausgeführt wird.
+Spezifikation, z. B. "# Schritt 3: LED einschalten".
+- Nach dem Code stellst du genau EINE Verstandnisfrage, die beantwortet \
+werden soll, bevor der Code ausgefuhrt wird.
 - Du antwortest auf Deutsch, freundlich und knapp.\
 """
 
@@ -50,32 +50,82 @@ _RULE_REMINDER = (
     "Antworte auf Deutsch.]"
 )
 
-# Vorlage im Spezifikationsfeld
+# Vorlage: Eingabe / Ausgabe / Variablen
 _SPEC_TEMPLATE = """\
 ## EINGABE
 (Welche Sensoren oder Eingaben? Datentyp und Wertebereich angeben.)
-z. B.: Taste an Pin 14 – digital, Werte 0 oder 1
-
-## VERARBEITUNG
-(Algorithmus als nummerierte Schritte, Pseudocode oder Mermaid-Diagramm.
-Alle Bedingungen und Schleifen mit Abbruchkriterium angeben.)
-z. B.:
-1. Warte, bis Taste gedrückt wird (Pin 14 = 1)
-2. LED an Pin 18 einschalten
-3. 1 Sekunde warten
-4. LED ausschalten
-5. Zurück zu Schritt 1
+z. B.: Keine externen Eingaben – Programmstart ist der Auslöser.
 
 ## AUSGABE
 (Welche Aktoren oder Ausgaben? Pins, Formate, Wertebereiche.)
-z. B.: LED an Pin 18 – digital HIGH/LOW
+z. B.: 8 RGB-LEDs (WS2812B) an einem Datenpin; je LED Farbwert (R, G, B).
 
 ## VARIABLEN
 (Name | Datentyp | Bedeutung)
 z. B.:
-taste_pin | int | Pin-Nummer der Taste
-led_pin   | int | Pin-Nummer der LED\
+position  | int | aktuelle LED-Position (0–7)
+farbindex | int | aktueller Farbindex (0 = Rot, 1 = Grün, 2 = Blau)\
 """
+
+# Ablauf-Vorlage: Freitext mit Signalwörtern
+_ABLAUF_FREITEXT_PLACEHOLDER = """\
+Beschreibe den Ablauf in eigenen Worten.
+Nutze die Signalwörter aus der Leiste unten.
+
+Beispiel:
+position auf 0 setzen, farbindex auf 0 setzen
+wiederhole für immer:
+    position um 1 erhöhen
+    falls position > 7:
+        position auf 0 setzen
+        farbindex um 1 erhöhen
+        falls farbindex > 2:
+            farbindex auf 0 setzen
+    LED an position mit farbe[farbindex] leuchten lassen
+    0,05 Sekunden warten\
+"""
+
+# Ablauf-Vorlage: Mermaid-Diagramm
+_ABLAUF_MERMAID_PLACEHOLDER = """\
+flowchart TD
+    A([Start]) --> B[position = 0, farbindex = 0]
+    B --> C[LED position leuchtet in farbe]
+    C --> D[position + 1]
+    D --> E{position > 7?}
+    E -- Ja --> F[position = 0]
+    F --> G[farbindex + 1]
+    G --> H{farbindex > 2?}
+    H -- Ja --> I[farbindex = 0]
+    H -- Nein --> C
+    I --> C
+    E -- Nein --> C\
+"""
+
+# Signalwort-Bausteine: (Beschriftung, einzufügender Text)
+_SIGNAL_SNIPPETS = [
+    ("falls … dann",   "falls BEDINGUNG:\n    AKTION\n"),
+    ("sonst",          "sonst:\n    AKTION\n"),
+    ("solange … tue",  "solange BEDINGUNG:\n    AKTION\n"),
+    ("wiederhole … bis", "wiederhole:\n    AKTION\nbis BEDINGUNG\n"),
+    ("zähle … bis",    "zähle i von 0 bis ZAHL:\n    AKTION\n"),
+    ("warte bis",      "warte bis BEDINGUNG\n"),
+]
+
+_BTN_ACTIVE = (
+    f"background:{THEME['accent']}; color:#fff; font-weight:bold;"
+    f"border:none; border-radius:4px; padding:3px 8px; font-size:11px;"
+)
+_BTN_INACTIVE = (
+    f"background:{THEME['bg_dark']}; color:{THEME['text_dim']};"
+    f"border:1px solid {THEME['border']}; border-radius:4px;"
+    f"padding:3px 8px; font-size:11px;"
+)
+_BTN_SIGNAL = (
+    f"background:{THEME['bg_mid'] if 'bg_mid' in THEME else THEME['bg_dark']};"
+    f"color:{THEME['info']};"
+    f"border:1px solid {THEME['border']}; border-radius:3px;"
+    f"padding:2px 6px; font-size:10px;"
+)
 
 
 # ── Ollama-Worker ─────────────────────────────────────────────────────────────
@@ -107,7 +157,7 @@ class _OllamaWorker(QThread):
                 if resp.status_code != 200:
                     self.error_occurred.emit(
                         f"Ollama antwortet mit Status {resp.status_code}.\n"
-                        f'Ist das Modell „{self._model}" geladen?'
+                        f'Ist das Modell "{self._model}" geladen?'
                     )
                     return
                 for raw_line in resp.iter_lines():
@@ -137,7 +187,6 @@ class _OllamaWorker(QThread):
 class CoderPanel(QWidget):
     """Seitliches Panel: Schüler spezifizieren vollständig – Bot generiert Code."""
 
-    # Signale
     insert_code_requested = pyqtSignal(str)   # Code-Block → neuer Editor-Tab
 
     def __init__(self, parent=None):
@@ -150,6 +199,7 @@ class CoderPanel(QWidget):
         self._pending_response = ""
         self._last_code_block  = ""
         self._iteration        = 0
+        self._ablauf_mode      = "freitext"   # "freitext" | "mermaid"
         self._build_ui()
 
     # ── UI aufbauen ──────────────────────────────────────────────────────────
@@ -159,7 +209,7 @@ class CoderPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
+        # ── Header ────────────────────────────────────────────────────────
         header = QWidget()
         header.setFixedHeight(36)
         header.setStyleSheet(
@@ -185,14 +235,13 @@ class CoderPanel(QWidget):
         )
         root.addWidget(header)
 
-        # ── Spezifikations-Bereich ───────────────────────────────────────
+        # ── Spezifikations-Accordion ───────────────────────────────────────
         self._spec_wrapper = QWidget()
         self._spec_wrapper.setStyleSheet(f"background:{THEME['bg_panel']};")
         sw_layout = QVBoxLayout(self._spec_wrapper)
         sw_layout.setContentsMargins(8, 6, 8, 4)
         sw_layout.setSpacing(4)
 
-        # Accordion-Kopfzeile
         acc_row = QHBoxLayout()
         spec_lbl = QLabel("SPEZIFIKATION")
         spec_lbl.setStyleSheet(
@@ -210,16 +259,17 @@ class CoderPanel(QWidget):
         acc_row.addWidget(self._toggle_btn)
         sw_layout.addLayout(acc_row)
 
-        # Eingabe-Feld (kollabierbar)
+        # ── Kollabierter Inhalt ────────────────────────────────────────────
         self._spec_body = QWidget()
         sb_layout = QVBoxLayout(self._spec_body)
         sb_layout.setContentsMargins(0, 0, 0, 0)
         sb_layout.setSpacing(4)
 
+        # Eingabe / Ausgabe / Variablen
         self._spec_edit = QTextEdit()
         self._spec_edit.setPlaceholderText(_SPEC_TEMPLATE)
-        self._spec_edit.setMinimumHeight(190)
-        self._spec_edit.setMaximumHeight(300)
+        self._spec_edit.setMinimumHeight(110)
+        self._spec_edit.setMaximumHeight(180)
         self._spec_edit.setStyleSheet(
             f"background:{THEME['bg_dark']}; color:{THEME['text']};"
             f"border:1px solid {THEME['border']}; border-radius:4px; padding:4px;"
@@ -228,6 +278,66 @@ class CoderPanel(QWidget):
         )
         sb_layout.addWidget(self._spec_edit)
 
+        # ── Ablauf-Unterbereich ────────────────────────────────────────────
+        ablauf_section = QWidget()
+        ablauf_layout = QVBoxLayout(ablauf_section)
+        ablauf_layout.setContentsMargins(0, 2, 0, 0)
+        ablauf_layout.setSpacing(3)
+
+        # Kopfzeile mit Modus-Toggle
+        ablauf_header = QHBoxLayout()
+        ablauf_lbl = QLabel("ABLAUF")
+        ablauf_lbl.setStyleSheet(
+            f"color:{THEME['text_dim']}; font-size:10px;"
+            f"font-weight:bold; letter-spacing:1px;"
+        )
+        ablauf_header.addWidget(ablauf_lbl)
+        ablauf_header.addStretch()
+
+        self._btn_freitext = QPushButton("📝 Freitext")
+        self._btn_freitext.setStyleSheet(_BTN_ACTIVE)
+        self._btn_freitext.clicked.connect(lambda: self._set_ablauf_mode("freitext"))
+        ablauf_header.addWidget(self._btn_freitext)
+
+        self._btn_mermaid = QPushButton("📊 Mermaid")
+        self._btn_mermaid.setStyleSheet(_BTN_INACTIVE)
+        self._btn_mermaid.clicked.connect(lambda: self._set_ablauf_mode("mermaid"))
+        ablauf_header.addWidget(self._btn_mermaid)
+
+        ablauf_layout.addLayout(ablauf_header)
+
+        # Ablauf-Textfeld
+        self._ablauf_edit = QTextEdit()
+        self._ablauf_edit.setPlaceholderText(_ABLAUF_FREITEXT_PLACEHOLDER)
+        self._ablauf_edit.setMinimumHeight(120)
+        self._ablauf_edit.setMaximumHeight(200)
+        self._ablauf_edit.setStyleSheet(
+            f"background:{THEME['bg_dark']}; color:{THEME['text']};"
+            f"border:1px solid {THEME['border']}; border-radius:4px; padding:4px;"
+            f"font-family:'JetBrains Mono','Fira Code','Consolas',monospace;"
+            f"font-size:11px;"
+        )
+        ablauf_layout.addWidget(self._ablauf_edit)
+
+        # Signalwort-Bausteine (nur im Freitext-Modus sichtbar)
+        self._signal_row = QWidget()
+        signal_layout = QHBoxLayout(self._signal_row)
+        signal_layout.setContentsMargins(0, 0, 0, 0)
+        signal_layout.setSpacing(3)
+        for label, snippet in _SIGNAL_SNIPPETS:
+            btn = QPushButton(label)
+            btn.setStyleSheet(_BTN_SIGNAL)
+            btn.setToolTip(f"Einfügen:\n{snippet}")
+            btn.clicked.connect(
+                lambda _checked=False, s=snippet: self._insert_signal_snippet(s)
+            )
+            signal_layout.addWidget(btn)
+        signal_layout.addStretch()
+        ablauf_layout.addWidget(self._signal_row)
+
+        sb_layout.addWidget(ablauf_section)
+
+        # Senden-Button
         self._send_spec_btn = QPushButton("📤  Spezifikation senden")
         self._send_spec_btn.setStyleSheet(
             f"background:{THEME['accent']}; color:#fff; font-weight:bold;"
@@ -235,6 +345,7 @@ class CoderPanel(QWidget):
         )
         self._send_spec_btn.clicked.connect(self._send_spec)
         sb_layout.addWidget(self._send_spec_btn)
+
         sw_layout.addWidget(self._spec_body)
         root.addWidget(self._spec_wrapper)
 
@@ -293,14 +404,11 @@ class CoderPanel(QWidget):
         btn_row.addWidget(self._clear_btn)
 
         self._insert_btn = QPushButton("→ Editor")
-        self._insert_btn.setToolTip(
-            "Letzten Code-Block in neuen Tab einfügen"
-        )
+        self._insert_btn.setToolTip("Letzten Code-Block in neuen Tab einfügen")
         self._insert_btn.setEnabled(False)
         self._insert_btn.setStyleSheet(
             f"background:{THEME['success']}; color:#1e1e2e; font-weight:bold;"
             f"border:none; border-radius:4px; padding:4px 10px;"
-            "QToolButton:disabled {{ color: grey; }}"
         )
         self._insert_btn.clicked.connect(self._on_insert_code)
         btn_row.addWidget(self._insert_btn)
@@ -322,7 +430,7 @@ class CoderPanel(QWidget):
         self._append_bot(
             "Hallo! Ich bin dein Code-Generator. 🛠\n\n"
             "Füll die Spezifikation oben aus – alle vier Teile "
-            "(Eingabe, Verarbeitung, Ausgabe, Variablen) – und klicke "
+            "(Eingabe, Ablauf, Ausgabe, Variablen) – und klicke "
             'auf "Spezifikation senden".\n\n'
             "Erst wenn die Spezifikation vollständig ist, generiere ich Code."
         )
@@ -333,15 +441,49 @@ class CoderPanel(QWidget):
         self._spec_body.setVisible(not visible)
         self._toggle_btn.setText("▼ ausklappen" if visible else "▲ einklappen")
 
-    # ── Spezifikation absenden ────────────────────────────────────────────────
+    # ── Ablauf-Modus umschalten ───────────────────────────────────────────────
+    def _set_ablauf_mode(self, mode: str):
+        self._ablauf_mode = mode
+        if mode == "freitext":
+            self._btn_freitext.setStyleSheet(_BTN_ACTIVE)
+            self._btn_mermaid.setStyleSheet(_BTN_INACTIVE)
+            self._ablauf_edit.setPlaceholderText(_ABLAUF_FREITEXT_PLACEHOLDER)
+            self._signal_row.setVisible(True)
+        else:
+            self._btn_freitext.setStyleSheet(_BTN_INACTIVE)
+            self._btn_mermaid.setStyleSheet(_BTN_ACTIVE)
+            self._ablauf_edit.setPlaceholderText(_ABLAUF_MERMAID_PLACEHOLDER)
+            self._signal_row.setVisible(False)
+
+    # ── Signalwort-Baustein einfügen ──────────────────────────────────────────
+    def _insert_signal_snippet(self, snippet: str):
+        cursor = self._ablauf_edit.textCursor()
+        cursor.insertText(snippet)
+        self._ablauf_edit.setTextCursor(cursor)
+        self._ablauf_edit.setFocus()
+
+    # ── Spezifikation zusammenbauen und senden ────────────────────────────────
     def _send_spec(self):
-        spec = self._spec_edit.toPlainText().strip()
-        if not spec:
+        static = self._spec_edit.toPlainText().strip()
+        ablauf = self._ablauf_edit.toPlainText().strip()
+
+        missing = []
+        if not static:
+            missing.append("Eingabe, Ausgabe und Variablen")
+        if not ablauf:
+            missing.append("Ablauf")
+        if missing:
             self._append_bot(
-                "Das Feld ist leer. Bitte füll zuerst alle vier Teile aus."
+                f"Bitte füll noch aus: {', '.join(missing)}."
             )
             return
-        self._send_text(spec)
+
+        ablauf_label = (
+            "## ABLAUF (Mermaid-Diagramm)" if self._ablauf_mode == "mermaid"
+            else "## ABLAUF (Freitext)"
+        )
+        full_spec = f"{static}\n\n{ablauf_label}\n{ablauf}"
+        self._send_text(full_spec)
 
     # ── Freie Nachricht (Rückfragen-Iteration) ────────────────────────────────
     def _send_message(self):
@@ -360,7 +502,6 @@ class CoderPanel(QWidget):
         self._iter_lbl.setText(f"Iteration {self._iteration}")
         self._append_user(text)
 
-        # Regel-Erinnerung unsichtbar anhängen
         self._history.append(
             {"role": "user", "content": text + _RULE_REMINDER}
         )
@@ -445,14 +586,16 @@ class CoderPanel(QWidget):
 
     # ── Verlauf zurücksetzen ──────────────────────────────────────────────────
     def _clear_history(self):
-        self._history      = [{"role": "system", "content": CODER_SYSTEM_PROMPT}]
+        self._history         = [{"role": "system", "content": CODER_SYSTEM_PROMPT}]
         self._last_code_block = ""
-        self._iteration    = 0
+        self._iteration       = 0
         self._iter_lbl.setText("Iteration 0")
         self._insert_btn.setEnabled(False)
         self._chat_view.clear()
+        self._ablauf_edit.clear()
         self._spec_body.setVisible(True)
         self._toggle_btn.setText("▲ einklappen")
+        self._set_ablauf_mode("freitext")
         self._append_bot(
             "Neues Projekt gestartet. "
             "Füll die Spezifikation aus und sende sie ab."
@@ -493,6 +636,5 @@ class CoderPanel(QWidget):
 
 # ── Hilfsfunktion ─────────────────────────────────────────────────────────────
 def _extract_code_block(text: str) -> str:
-    """Extrahiert den ersten ```python … ``` oder ``` … ```-Block."""
     match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
     return match.group(1).rstrip() if match else ""

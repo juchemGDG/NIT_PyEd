@@ -5,6 +5,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings
 from PyQt6.QtGui import (
@@ -14,7 +15,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QStackedWidget, QTabWidget, QLabel, QStatusBar, QToolBar, QToolButton,
     QComboBox, QFileDialog, QMessageBox, QInputDialog, QMenu,
-    QDialog, QPushButton, QTextEdit,
+    QDialog, QPushButton, QTextEdit, QLineEdit, QFormLayout, QGroupBox,
 )
 
 from .config import APP_NAME, APP_VERSION, THEME, SUPPORTED_BOARDS, python_executable, tool_command
@@ -161,6 +162,180 @@ QScrollBar::handle:horizontal {{
     min-width: 20px;
 }}
 """
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Git-Clone-Dialog
+# ──────────────────────────────────────────────────────────────────────────────
+class GitCloneDialog(QDialog):
+    """Dialog zum Klonen eines Git-Repositories mit optionaler Credential-Eingabe."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Git: Repository klonen")
+        self.setMinimumWidth(520)
+        self._target_manually_edited = False
+        self._build_ui()
+        self._apply_light_style_if_needed()
+        self._update_auth_section("")
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self._url_edit = QLineEdit()
+        self._url_edit.setPlaceholderText("https://github.com/… oder git@github.com:…")
+        self._url_edit.textChanged.connect(self._on_url_changed)
+        form.addRow("Repository-URL:", self._url_edit)
+
+        self._target_edit = QLineEdit()
+        self._target_edit.setPlaceholderText("Ordnername im Sketchbook")
+        self._target_edit.textEdited.connect(self._on_target_edited)
+        form.addRow("Zielordner:", self._target_edit)
+
+        layout.addLayout(form)
+
+        # Anmeldedaten-Gruppe (nur bei HTTPS sichtbar)
+        self._auth_group = QGroupBox("Anmeldedaten (für private Repositories)")
+        auth_form = QFormLayout(self._auth_group)
+        auth_form.setSpacing(8)
+
+        self._username_edit = QLineEdit()
+        self._username_edit.setPlaceholderText("GitHub-Benutzername")
+        auth_form.addRow("Benutzername:", self._username_edit)
+
+        pw_widget = QWidget()
+        pw_layout = QHBoxLayout(pw_widget)
+        pw_layout.setContentsMargins(0, 0, 0, 0)
+        pw_layout.setSpacing(4)
+        self._password_edit = QLineEdit()
+        self._password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._password_edit.setPlaceholderText("Passwort oder Personal Access Token")
+        self._pw_toggle = QPushButton("Zeigen")
+        self._pw_toggle.setCheckable(True)
+        self._pw_toggle.setFixedWidth(70)
+        self._pw_toggle.toggled.connect(
+            lambda checked: self._password_edit.setEchoMode(
+                QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+            )
+        )
+        pw_layout.addWidget(self._password_edit)
+        pw_layout.addWidget(self._pw_toggle)
+        auth_form.addRow("Passwort / Token:", pw_widget)
+
+        token_hint = QLabel(
+            "Tipp: Bei GitHub unter Einstellungen → Developer settings → "
+            "Personal access tokens einen Token erstellen (Scope: repo)."
+        )
+        token_hint.setWordWrap(True)
+        token_hint.setObjectName("hintLabel")
+        auth_form.addRow("", token_hint)
+
+        layout.addWidget(self._auth_group)
+
+        # SSH-Hinweis (nur bei SSH-URLs sichtbar)
+        self._ssh_hint = QLabel(
+            "SSH-Authentifizierung: SSH-Schlüssel müssen im System eingerichtet sein "
+            "(~/.ssh/id_rsa oder id_ed25519). Bei GitHub können Schlüssel unter "
+            "Einstellungen → SSH and GPG keys hinzugefügt werden."
+        )
+        self._ssh_hint.setWordWrap(True)
+        self._ssh_hint.setObjectName("hintLabel")
+        self._ssh_hint.setVisible(False)
+        layout.addWidget(self._ssh_hint)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        clone_btn = QPushButton("Klonen")
+        clone_btn.setDefault(True)
+        clone_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(clone_btn)
+        layout.addLayout(btn_layout)
+
+    def _apply_light_style_if_needed(self):
+        app = QApplication.instance()
+        if app is None:
+            return
+        if app.palette().color(QPalette.ColorRole.Window).lightness() < 128:
+            return
+        self.setStyleSheet("""
+            QDialog, QWidget { background: #f8fafc; color: #111827; }
+            QGroupBox {
+                background: #f1f5f9;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding-top: 8px;
+                margin-top: 8px;
+                font-weight: 600;
+                color: #374151;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 6px;
+            }
+            QLabel { color: #374151; }
+            QLabel#hintLabel { color: #6b7280; font-size: 11px; }
+            QLineEdit {
+                background: #ffffff;
+                color: #111827;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 5px 8px;
+            }
+            QPushButton {
+                background: #e2e8f0;
+                color: #111827;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover { background: #cbd5e1; }
+            QPushButton:default {
+                background: #3b82f6;
+                color: white;
+                border-color: #2563eb;
+            }
+            QPushButton:default:hover { background: #2563eb; }
+        """)
+
+    def _on_url_changed(self, text: str):
+        url = text.strip()
+        if not self._target_manually_edited:
+            name = os.path.basename(url.rstrip("/")).removesuffix(".git")
+            if name:
+                self._target_edit.setText(name)
+        self._update_auth_section(url)
+
+    def _on_target_edited(self):
+        self._target_manually_edited = True
+
+    def _update_auth_section(self, url: str):
+        is_https = url.startswith(("https://", "http://"))
+        is_ssh = url.startswith("git@") or url.startswith("ssh://")
+        self._auth_group.setVisible(is_https)
+        self._ssh_hint.setVisible(is_ssh)
+        self.adjustSize()
+
+    def url(self) -> str:
+        return self._url_edit.text().strip()
+
+    def target_name(self) -> str:
+        return self._target_edit.text().strip()
+
+    def username(self) -> str:
+        return self._username_edit.text().strip()
+
+    def password(self) -> str:
+        return self._password_edit.text()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1052,14 +1227,22 @@ class MainWindow(QMainWindow):
         self._update_git_status_label()
         self._console.append_info(f"[Git] Aktives Repository: {selected_repo}\n")
 
-    def _run_git_process(self, cmd: list[str], cwd: str, label: str, on_success=None):
+    def _run_git_process(
+        self,
+        cmd: list[str],
+        cwd: str,
+        label: str,
+        on_success=None,
+        display_cmd: list[str] | None = None,
+    ):
         if shutil.which("git") is None:
             QMessageBox.critical(self, "Git", "Git wurde auf diesem System nicht gefunden.")
             return
 
+        log_cmd = display_cmd if display_cmd is not None else cmd
         self._console.append_info(f"\n[Git] {label}\n")
         self._console.append_info(f"[Git] Arbeitsordner: {cwd}\n")
-        self._console.append_info(f"[Git] Befehl: {' '.join(cmd)}\n")
+        self._console.append_info(f"[Git] Befehl: {' '.join(log_cmd)}\n")
 
         proc = ProcessRunner(cmd, cwd=cwd)
         proc.output.connect(
@@ -1148,34 +1331,74 @@ class MainWindow(QMainWindow):
         return dlg.textValue(), ok
 
     def _git_clone(self):
-        url, ok = self._ask_text_input(
-            "Git: Repository klonen",
-            "Repository-URL (HTTPS/SSH):",
-        )
-        if not ok or not url.strip():
+        dlg = GitCloneDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        url = url.strip()
 
-        default_target = os.path.basename(url.rstrip("/")).removesuffix(".git") or "projekt"
-        target_name, ok = self._ask_text_input(
-            "Git: Zielordner",
-            "Ordnername im Sketchbook:",
-            default_target,
-        )
-        if not ok or not target_name.strip():
+        url = dlg.url()
+        target_name = dlg.target_name()
+        username = dlg.username()
+        password = dlg.password()
+
+        if not url or not target_name:
+            QMessageBox.warning(self, "Git", "URL und Zielordner dürfen nicht leer sein.")
             return
 
         base = self._get_git_base_dir()
-        target = os.path.join(base, target_name.strip())
+        target = os.path.join(base, target_name)
         if os.path.exists(target):
             QMessageBox.warning(self, "Git", f"Zielordner existiert bereits:\n{target}")
             return
+
+        # Für HTTPS mit Credentials: URL mit eingebetteten Zugangsdaten bauen
+        clone_url = url
+        display_url = url
+        if username and password and url.startswith(("https://", "http://")):
+            parsed = urlparse(url)
+            netloc = f"{username}:{password}@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            clone_url = urlunparse(parsed._replace(netloc=netloc))
+            display_url = urlunparse(parsed._replace(netloc=f"{username}:***@{parsed.hostname}"))
+
+        clone_cmd = ["git", "clone", clone_url, target]
+        display_cmd = ["git", "clone", display_url, target]
+
+        def on_clone_success():
+            self._set_active_repo_after_clone(target)
+            if username and password and url.startswith(("https://", "http://")):
+                self._store_git_credentials(target, url, username, password)
+
         self._run_git_process(
-            ["git", "clone", url, target],
+            clone_cmd,
             cwd=base,
             label="Repository klonen",
-            on_success=lambda: self._set_active_repo_after_clone(target),
+            on_success=on_clone_success,
+            display_cmd=display_cmd,
         )
+
+    def _store_git_credentials(self, repo_path: str, url: str, username: str, password: str):
+        """Speichert HTTPS-Credentials lokal im Repository und in ~/.git-credentials."""
+        # Lokalen credential.helper auf 'store' setzen
+        subprocess.run(
+            ["git", "-C", repo_path, "config", "credential.helper", "store"],
+            capture_output=True,
+            check=False,
+        )
+        # In ~/.git-credentials schreiben (Format: https://user:pass@hostname)
+        parsed = urlparse(url)
+        cred_line = f"{parsed.scheme}://{username}:{password}@{parsed.hostname}\n"
+        creds_file = Path.home() / ".git-credentials"
+        try:
+            existing = creds_file.read_text(encoding="utf-8") if creds_file.exists() else ""
+            # Bestehenden Eintrag für denselben Host ersetzen oder neu anfügen
+            host_prefix = f"{parsed.scheme}://{username}:"
+            lines = [ln for ln in existing.splitlines(keepends=True) if not ln.startswith(host_prefix)]
+            lines.append(cred_line)
+            creds_file.write_text("".join(lines), encoding="utf-8")
+            self._console.append_success("[Git] Zugangsdaten wurden gespeichert.\n")
+        except OSError as exc:
+            self._console.append_error(f"[Git] Zugangsdaten konnten nicht gespeichert werden: {exc}\n")
 
     def _set_active_repo_after_clone(self, repo_path: str):
         normalized = str(Path(repo_path).resolve())

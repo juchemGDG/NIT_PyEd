@@ -201,7 +201,11 @@ class GitCloneDialog(QDialog):
 
         # Anmeldedaten-Gruppe (nur bei HTTPS sichtbar)
         self._auth_group = QGroupBox("Anmeldedaten (für private Repositories)")
-        auth_form = QFormLayout(self._auth_group)
+        auth_outer = QVBoxLayout(self._auth_group)
+        auth_outer.setSpacing(8)
+        auth_outer.setContentsMargins(8, 8, 8, 8)
+
+        auth_form = QFormLayout()
         auth_form.setSpacing(8)
 
         self._username_edit = QLineEdit()
@@ -215,9 +219,10 @@ class GitCloneDialog(QDialog):
         self._password_edit = QLineEdit()
         self._password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._password_edit.setPlaceholderText("Passwort oder Access Token")
-        self._pw_toggle = QPushButton("Zeigen")
+        self._pw_toggle = QPushButton("👁")
         self._pw_toggle.setCheckable(True)
-        self._pw_toggle.setFixedWidth(70)
+        self._pw_toggle.setFixedSize(32, 28)
+        self._pw_toggle.setToolTip("Passwort anzeigen / verbergen")
         self._pw_toggle.toggled.connect(
             lambda checked: self._password_edit.setEchoMode(
                 QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
@@ -227,10 +232,13 @@ class GitCloneDialog(QDialog):
         pw_layout.addWidget(self._pw_toggle)
         auth_form.addRow("Passwort / Token:", pw_widget)
 
+        auth_outer.addLayout(auth_form)
+
+        # Hinweis unterhalb der Felder, volle Breite
         self._auth_hint = QLabel("")
         self._auth_hint.setWordWrap(True)
         self._auth_hint.setObjectName("hintLabel")
-        auth_form.addRow("", self._auth_hint)
+        auth_outer.addWidget(self._auth_hint)
 
         layout.addWidget(self._auth_group)
 
@@ -1565,7 +1573,10 @@ class MainWindow(QMainWindow):
         repo = self._require_git_repo()
         if not repo:
             return
-        if self._ensure_pull_upstream(repo):
+        branch = self._get_current_branch(repo)
+        if branch and branch != "HEAD":
+            self._run_git_process(["git", "pull", "origin", branch], cwd=repo, label="Pull")
+        else:
             self._run_git_process(["git", "pull"], cwd=repo, label="Pull")
 
     def _ensure_pull_upstream(self, repo: str) -> bool:
@@ -1613,7 +1624,9 @@ class MainWindow(QMainWindow):
             ["git", "branch", "--set-upstream-to", selected, current],
             cwd=repo,
             label=f"Upstream setzen ({current} -> {selected})",
-            on_success=lambda: self._run_git_process(["git", "pull"], cwd=repo, label="Pull"),
+            on_success=lambda: self._run_git_process(
+                ["git", "pull", "origin", current], cwd=repo, label="Pull"
+            ),
         )
         return False
 
